@@ -269,7 +269,7 @@ struct global_map {
                 }
                 it++;
             }
-            std::cout << "Restored voxel number = " << voxels_recent_visited.size() << std::endl;
+            LOG_S(INFO) << "Restored voxel number = " << voxels_recent_visited.size() << std::endl;
         }
         int number_of_voxels_before_add = voxels_recent_visited.size();
         int pt_size = pc_in.points.size();
@@ -333,7 +333,7 @@ struct global_map {
         // for (int i = 0; i  <  pt_size; i++)
         {
             if (i % 1000 == 0) {
-                std::cout << "saving rgb cloud map " << (int)((pt_size - 1 - i) * 100.0 / (pt_size - 1)) << " % ...\r";
+                LOG_S(INFO) << "saving rgb cloud map " << (int)((pt_size - 1 - i) * 100.0 / (pt_size - 1)) << " % ...\r";
             }
 
             if (m_rgb_pts_vec[i]->m_N_rgb < 1) {
@@ -348,11 +348,11 @@ struct global_map {
             pc_rgb.points[pt_count].b = m_rgb_pts_vec[i]->m_rgb[0];
             pt_count++;
         }
-        std::cout << "saving offline map 100% ..." << std::endl;
+        LOG_S(INFO) << "saving offline map 100% ..." << std::endl;
         pc_rgb.resize(pt_count);
-        std::cout << "total have " << pt_count << " points." << std::endl;
+        LOG_S(INFO) << "total have " << pt_count << " points." << std::endl;
         if (save_pcd) {
-            std::cout << "saving pcd to: " << file_path << ".pcd" << std::endl;
+            LOG_S(INFO) << "saving pcd to: " << file_path << ".pcd" << std::endl;
             pcl::io::savePCDFileBinary(std::string(file_path).append(".pcd"), pc_rgb);
         }
 

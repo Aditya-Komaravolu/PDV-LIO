@@ -134,7 +134,7 @@ class PointCloudXYZDump {
                 ofs.close();
             }
         } else {
-            std::cout << "Dump to file [" << file_name << "] fail!, cannot open file" << endl;
+            LOG_S(WARNING) << "Dump to file [" << file_name << "] fail!, cannot open file" << endl;
         }
     }
 
@@ -180,7 +180,7 @@ void save_dump(std::string dump_dir) {
     std::string file_name = dump_dir + "test.pv_lio";
 
     point_cloud_dump.dump_to_file(file_name);
-    std::cout << "saved openmvs dump to " << file_name << "\n";
+    LOG_S(INFO) << "saved openmvs dump to " << file_name << "\n";
 }
 }  // namespace openmvs_map
 

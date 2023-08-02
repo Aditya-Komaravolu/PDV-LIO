@@ -437,8 +437,8 @@ bool sync_packages(MeasureGroup &meas) {
     // meas.rgb_cam_1.push_back(rgb_cam_1_buffer.front());
     // rgb_cam_1_buffer.pop_front();
     if (!meas.cam.empty()) {
-        std::cout << "rgb frames in queue: " << meas.cam.size() << std::endl;
-        std::cout << "current frame index: " << colored_map::colored_frame_index << std::endl;
+        LOG_S(INFO) << "rgb frames in queue: " << meas.cam.size() << std::endl;
+        LOG_S(INFO) << "current frame index: " << colored_map::colored_frame_index << std::endl;
 
         auto diff_time = meas.cam.back()->header.stamp.toSec() - time_buffer.front();
         // std::cout << "diff time" << diff_time << std::endl;
@@ -1024,7 +1024,7 @@ int main(int argc, char **argv) {
                 buildVoxelMap(pv_list, max_voxel_size, max_layer, layer_size,
                               max_points_size, max_points_size, min_eigen_value,
                               voxel_map);
-                std::cout << "build voxel map" << std::endl;
+                LOG_S(INFO) << "build voxel map" << std::endl;
 
                 if (publish_voxel_map) {
                     pubVoxelMap(voxel_map, publish_max_voxel_layer, voxel_map_pub);
