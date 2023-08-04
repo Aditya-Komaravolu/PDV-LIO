@@ -265,6 +265,10 @@ void publish_render_pts(ros::Publisher &pts_pub, global_map &m_map_rgb_pts) {
 }
 
 void color_point_cloud(state_ikfom state_point, ros::Publisher pubLaserCloudColor, MeasureGroup &Measures, PointCloudXYZRGBI::Ptr feats_undistort, double first_lidar_time) {
+    // if (std::abs(Measures.time_buffer.back() - Measures.cam.back()->header.stamp.toSec()) > 0.05) {
+    //     LOG_S(WARNING) << "lidar and camera too much time offset, skip coloring" << std::endl;
+    //     return;
+    // }
     PointCloudXYZRGBI::Ptr laserTemp(feats_undistort);  // dense is TRUE
     pcl::PointXYZI temp_point;
     PointType temp_point_type;

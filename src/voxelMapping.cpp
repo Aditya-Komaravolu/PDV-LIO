@@ -90,7 +90,7 @@ double match_time = 0, solve_time = 0, solve_const_H_time = 0;
 int kdtree_size_st = 0, kdtree_size_end = 0, add_point_size = 0, kdtree_delete_counter = 0;
 bool time_sync_en = false, extrinsic_est_en = true, path_en = true, pcd_save_en = false;
 bool save_openmvs_file_en, save_image_and_pose_en;
-bool save_cloud_pcd_en, save_cloud_ply_en;
+bool save_cloud_pcd_en, save_cloud_ply_en, save_cloud_lio_pcd;
 double lidar_time_offset = 0.0;
 /**************************/
 
@@ -441,7 +441,7 @@ bool sync_packages(MeasureGroup &meas) {
         LOG_S(INFO) << "current frame index: " << colored_map::colored_frame_index << std::endl;
 
         auto diff_time = meas.cam.back()->header.stamp.toSec() - time_buffer.front();
-        // std::cout << "diff time" << diff_time << std::endl;
+        // LOG_S(WARNING) << "diff time" << diff_time << std::endl;
         colored_map::colored_frame_index++;
     }
 
@@ -486,6 +486,33 @@ void publish_frame_world(const ros::Publisher &pubLaserCloudFull) {
         laserCloudmsg.header.frame_id = "camera_init";
         pubLaserCloudFull.publish(laserCloudmsg);
         publish_count -= PUBFRAME_PERIOD;
+    }
+
+    /**************** save map ****************/
+    /* 1. make sure you have enough memories
+    /* 2. noted that pcd save will influence the real-time performences **/
+    if (save_cloud_lio_pcd) {
+        int size = feats_undistort->points.size();
+        PointCloudXYZRGBI::Ptr laserCloudWorld(
+            new PointCloudXYZRGBI(size, 1));
+
+        for (int i = 0; i < size; i++) {
+            RGBpointBodyToWorld(&feats_undistort->points[i],
+                                &laserCloudWorld->points[i]);
+        }
+        *pcl_wait_save += *laserCloudWorld;
+
+        // static int scan_wait_num = 0;
+        // scan_wait_num++;
+        // if (pcl_wait_save->size() > 0 && pcd_save_interval > 0 && scan_wait_num >= pcd_save_interval) {
+        //     pcd_index++;
+        //     string all_points_dir(string(string(ROOT_DIR) + "PCD/scans_") + to_string(pcd_index) + string(".pcd"));
+        //     pcl::PCDWriter pcd_writer;
+        //     cout << "current scan saved to " << all_points_dir << endl;
+        //     pcd_writer.writeBinary(all_points_dir, *pcl_wait_save);
+        //     pcl_wait_save->clear();
+        //     scan_wait_num = 0;
+        // }
     }
 }
 
@@ -841,6 +868,7 @@ int main(int argc, char **argv) {
     nh.param<bool>("save/openmvs_file", save_openmvs_file_en, false);
     nh.param<bool>("save/cloud_pcd", save_cloud_pcd_en, true);
     nh.param<bool>("save/cloud_ply", save_cloud_ply_en, false);
+    nh.param<bool>("save/cloud_lio_pcd", save_cloud_lio_pcd, false);
 
     // mapping algorithm params
     nh.param<float>("mapping/det_range", DET_RANGE, 300.f);
@@ -1155,7 +1183,7 @@ int main(int argc, char **argv) {
 
             /******* Publish points *******/
             if (path_en) publish_path(pubPath);
-            if (scan_pub_en || save_cloud_pcd_en) publish_frame_world(pubLaserCloudFull);
+            if (scan_pub_en || save_cloud_lio_pcd) publish_frame_world(pubLaserCloudFull);
             if (scan_pub_en && scan_body_pub_en) publish_frame_body(pubLaserCloudFull_body);
             if (publish_voxel_map) {
                 pubVoxelMap(voxel_map, publish_max_voxel_layer, voxel_map_pub);
@@ -1178,6 +1206,17 @@ int main(int argc, char **argv) {
     }
     if (save_cloud_pcd_en || save_cloud_ply_en) {
         colored_map::save_map(save_base_path, save_cloud_pcd_en, save_cloud_ply_en);
+    }
+
+    /**************** save map ****************/
+    /* 1. make sure you have enough memories
+    /* 2. pcd save will largely influence the real-time performences **/
+    if (pcl_wait_save->size() > 0 && save_cloud_lio_pcd) {
+        string file_name = save_base_path + "/scans.pcd";
+        string all_points_dir(file_name);
+        pcl::PCDWriter pcd_writer;
+        LOG_S(INFO) << "current lio only scan saved to " << file_name << endl;
+        pcd_writer.writeBinary(all_points_dir, *pcl_wait_save);
     }
 
     return EXIT_SUCCESS;
