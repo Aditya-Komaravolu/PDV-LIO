@@ -540,7 +540,6 @@ void publish_frame_world(const ros::Publisher &pubLaserCloudFull) {
         PointCloudXYZINormal::Ptr laserCloudWorld(
             new PointCloudXYZINormal(size, 1));
 
-#pragma omp parallel for
         for (int i = 0; i < size; i++) {
             RGBpointBodyToWorld(&feats_undistort->points[i],
                                 &laserCloudWorld->points[i]);
@@ -1207,8 +1206,8 @@ int main(int argc, char **argv) {
             sum_update_time += t_update_end - t_update_start;
 
             scan_index++;
-            if (common::debug_en){
-            std::printf("Mean  Topt: %.5fs   Tu: %.5fs\n", sum_optimize_time / scan_index, sum_update_time / scan_index);
+            if (common::debug_en) {
+                std::printf("Mean  Topt: %.5fs   Tu: %.5fs\n", sum_optimize_time / scan_index, sum_update_time / scan_index);
             }
             // ===============================================================================================================
             // 可视化相关的shit

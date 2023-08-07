@@ -214,3 +214,10 @@ Thanks to Xiaokai for his help with deriving the covariance propagation.
 3. Optimize comments and docs, make them more readable;
 4. Improve the efficiency of voxel map visualization;
 5. Publish covariance of points for visualization;
+
+
+## Additional Optimization
+
+```
+catkin_make -DCMAKE_BUILD_TYPE=Release
+```

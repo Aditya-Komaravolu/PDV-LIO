@@ -117,6 +117,7 @@ static inline void thread_render_pts_in_voxel(const calibration_data::camera_t &
     Eigen::Matrix3d m_pose_c2w_q = m_pose_w2c_q.inverse();
     auto m_pose_c2w_t = -(m_pose_w2c_q.inverse() * m_pose_w2c_t);
 
+    // #pragma omp parallel for shared(voxels_for_render, img_ptr)
     for (int voxel_idx = pt_start; voxel_idx < pt_end; voxel_idx++) {
         // continue;
         rgb_voxel_ptr voxel_ptr = (*voxels_for_render)[voxel_idx];
