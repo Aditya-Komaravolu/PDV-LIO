@@ -168,8 +168,8 @@ class rgb_pts {
         }
         return cov_mat;
     }
-    pcl::PointXYZI get_pt() {
-        pcl::PointXYZI pt;
+    pcl::PointXYZINormal get_pt() {
+        pcl::PointXYZINormal pt;
         pt.x = m_pos[0];
         pt.y = m_pos[1];
         pt.z = m_pos[2];
@@ -365,7 +365,7 @@ struct global_map {
 
 namespace colored_map {
 global_map m_map_rgb_pts;
-pcl::PointCloud<pcl::PointXYZI>::Ptr laserCloudFullResColor = boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
+pcl::PointCloud<pcl::PointXYZINormal>::Ptr laserCloudFullResColor = boost::make_shared<pcl::PointCloud<pcl::PointXYZINormal>>();
 std::vector<rgb_voxel_ptr> g_voxel_for_render;
 std::atomic<long> render_pts_count;
 std::vector<std::shared_ptr<ros::Publisher>> m_pub_rgb_render_pointcloud_ptr_vec;

@@ -195,8 +195,18 @@ void RGBpointBodyToWorld(const state_ikfom state_point, PointType const *const p
     po->rgba = pi->rgba;
 }
 
+void RGBpointBodyToWorld(const state_ikfom &state_point, pcl::PointXYZINormal const *const pi, pcl::PointXYZINormal *const po) {
+    V3D p_body(pi->x, pi->y, pi->z);
+    V3D p_global(state_point.rot * (state_point.offset_R_L_I * p_body + state_point.offset_T_L_I) + state_point.pos);
+
+    po->x = p_global(0);
+    po->y = p_global(1);
+    po->z = p_global(2);
+    po->intensity = pi->intensity;
+}
+
 namespace openmvs_utils {
-void save_state(const state_ikfom state_point, PointCloudXYZRGBI::Ptr feats_undistort) {
+void save_state(const state_ikfom state_point, PointCloudXYZINormal::Ptr feats_undistort) {
     vect3 pos_lid;
     geometry_msgs::Quaternion geoQuat;
 
@@ -234,7 +244,7 @@ void save_state(const state_ikfom state_point, PointCloudXYZRGBI::Ptr feats_undi
             geoQuat.z);
 
         int size = feats_undistort->points.size();
-        PointCloudXYZRGBI::Ptr laserCloudWorld(new PointCloudXYZRGBI(size, 1));
+        PointCloudXYZINormal::Ptr laserCloudWorld(new PointCloudXYZINormal(size, 1));
 
         std::vector<uint32_t> points_in_view;
 

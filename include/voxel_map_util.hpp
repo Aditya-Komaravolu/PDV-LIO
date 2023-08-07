@@ -650,7 +650,7 @@ void updateVoxelMapOMP(const std::vector<pointWithCov> &input_points,
         }
     }
     double t_update_end = omp_get_wtime();
-    std::printf("Insert & store time:  %.4fs\n", t_update_end - t_update_start);
+    // std::printf("Insert & store time:  %.4fs\n", t_update_end - t_update_start);
     t_update_start = omp_get_wtime();
     // 并行延迟更新
 // #ifdef MP_EN
@@ -668,9 +668,9 @@ void updateVoxelMapOMP(const std::vector<pointWithCov> &input_points,
         }
     }
     t_update_end = omp_get_wtime();
-    std::printf("Update:  %.4fs\n", t_update_end - t_update_start);
+    // std::printf("Update:  %.4fs\n", t_update_end - t_update_start);
 
-    std::printf("Insert: %d  Update: %d \n", insert_count, update_count);
+    // std::printf("Insert: %d  Update: %d \n", insert_count, update_count);
 }
 
 void build_single_residual(const pointWithCov &pv, const OctoTree *current_octo,

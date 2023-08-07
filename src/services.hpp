@@ -98,7 +98,7 @@ void service_pub_rgb_maps(ros::NodeHandle nh) {
     }
 }
 
-static inline void thread_render_pts_in_voxel(const calibration_data::camera_t camera, const state_ikfom state_point, const int &pt_start, const int &pt_end, const cv::Mat &img_ptr,
+static inline void thread_render_pts_in_voxel(const calibration_data::camera_t &camera, const state_ikfom &state_point, const int &pt_start, const int &pt_end, const cv::Mat &img_ptr,
                                               const std::vector<rgb_voxel_ptr> *voxels_for_render, const double obs_time) {
     vec_3 pt_w;
     vec_3 rgb_color;
@@ -194,9 +194,9 @@ static inline void thread_render_pts_in_voxel(const calibration_data::camera_t c
 }
 
 void render_pts_in_voxels_mp(
-    const calibration_data::camera_t camera,
-    const state_ikfom state_point,
-    cv::Mat rgb_image,
+    const calibration_data::camera_t &camera,
+    const state_ikfom &state_point,
+    cv::Mat &rgb_image,
     std::unordered_set<rgb_voxel_ptr> *_voxels_for_render, const double &obs_time) {
     auto src_img = rgb_image;
     src_img = rectifyImage(src_img, camera.intrisicMat, camera.distCoeffs);
@@ -230,7 +230,7 @@ void render_pts_in_voxels_mp(
     // std::cout << "render_pts_count: " << render_pts_count << std::endl;
 }
 
-void service_render_update(const calibration_data::camera_t camera, const state_ikfom state_point, cv::Mat rgb_image, std::unordered_set<rgb_voxel_ptr> *_voxels_for_render, const double &obs_time) {
+void service_render_update(const calibration_data::camera_t &camera, const state_ikfom &state_point, cv::Mat &rgb_image, std::unordered_set<rgb_voxel_ptr> *_voxels_for_render, const double &obs_time) {
     render_pts_in_voxels_mp(camera, state_point, rgb_image, _voxels_for_render, obs_time);
 }
 
@@ -264,14 +264,14 @@ void publish_render_pts(ros::Publisher &pts_pub, global_map &m_map_rgb_pts) {
     pts_pub.publish(ros_pc_msg);
 }
 
-void color_point_cloud(state_ikfom state_point, ros::Publisher pubLaserCloudColor, MeasureGroup &Measures, PointCloudXYZRGBI::Ptr feats_undistort, double first_lidar_time) {
+void color_point_cloud(state_ikfom &state_point, ros::Publisher &pubLaserCloudColor, MeasureGroup &Measures, PointCloudXYZINormal::Ptr feats_undistort, double first_lidar_time) {
     // if (std::abs(Measures.time_buffer.back() - Measures.cam.back()->header.stamp.toSec()) > 0.05) {
     //     LOG_S(WARNING) << "lidar and camera too much time offset, skip coloring" << std::endl;
     //     return;
     // }
-    PointCloudXYZRGBI::Ptr laserTemp(feats_undistort);  // dense is TRUE
-    pcl::PointXYZI temp_point;
-    PointType temp_point_type;
+    PointCloudXYZINormal::Ptr laserTemp(feats_undistort);  // dense is TRUE
+    pcl::PointXYZINormal temp_point;
+    pcl::PointXYZINormal temp_point_type;
     colored_map::laserCloudFullResColor->clear();
     for (int i = 0; i < laserTemp->size(); i++) {
         RGBpointBodyToWorld(state_point, &laserTemp->points[i], &temp_point_type);

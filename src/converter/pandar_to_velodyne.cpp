@@ -104,7 +104,7 @@ void publish_points(T &new_pc, const sensor_msgs::PointCloud2 &old_msg, double u
 }
 
 void rsHandler_XYZI(sensor_msgs::PointCloud2 pc_msg) {
-    pcl::PointCloud<pcl::PointXYZI>::Ptr pc(new pcl::PointCloud<pcl::PointXYZI>());
+    pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc(new pcl::PointCloud<pcl::PointXYZINormal>());
     pcl::PointCloud<VelodynePointXYZIR>::Ptr pc_new(new pcl::PointCloud<VelodynePointXYZIR>());
     pcl::fromROSMsg(pc_msg, *pc);
 
@@ -216,8 +216,8 @@ void rsHandler_XYZIRT(const sensor_msgs::PointCloud2 &pc_msg) {
         add_ring<PandarPointXYZIRT, VelodynePointXYZIR>(pc_in, pc_out);
         publish_points(pc_out, pc_msg);
     } else if (output_type == "XYZI") {
-        pcl::PointCloud<pcl::PointXYZI>::Ptr pc_out(new pcl::PointCloud<pcl::PointXYZI>());
-        handle_pc_msg<PandarPointXYZIRT, pcl::PointXYZI>(pc_in, pc_out);
+        pcl::PointCloud<pcl::PointXYZINormal>::Ptr pc_out(new pcl::PointCloud<pcl::PointXYZINormal>());
+        handle_pc_msg<PandarPointXYZIRT, pcl::PointXYZINormal>(pc_in, pc_out);
         publish_points(pc_out, pc_msg);
     }
 }

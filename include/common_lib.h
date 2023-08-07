@@ -56,6 +56,7 @@ cv::RNG g_rng = cv::RNG(0);
 
 typedef pcl::PointXYZRGBINormal PointType;
 typedef pcl::PointCloud<PointType> PointCloudXYZRGBI;
+typedef pcl::PointCloud<pcl::PointXYZINormal> PointCloudXYZINormal;
 typedef vector<PointType, Eigen::aligned_allocator<PointType>> PointVector;
 typedef Vector3d V3D;
 typedef Matrix3d M3D;
@@ -76,11 +77,11 @@ struct MeasureGroup  // Lidar data and imu dates for the curent process
 {
     MeasureGroup() {
         lidar_beg_time = 0.0;
-        this->lidar.reset(new PointCloudXYZRGBI());
+        this->lidar.reset(new PointCloudXYZINormal());
     };
     double lidar_beg_time;
     double lidar_end_time;
-    PointCloudXYZRGBI::Ptr lidar;
+    PointCloudXYZINormal::Ptr lidar;
     deque<sensor_msgs::Imu::ConstPtr> imu;
     deque<sensor_msgs::ImageConstPtr> cam;
 };
@@ -229,6 +230,11 @@ bool esti_normvector(Matrix<T, 3, 1> &normvec, const PointVector &point, const T
 }
 
 float calc_dist(PointType p1, PointType p2) {
+    float d = (p1.x - p2.x) * (p1.x - p2.x) + (p1.y - p2.y) * (p1.y - p2.y) + (p1.z - p2.z) * (p1.z - p2.z);
+    return d;
+}
+
+float calc_dist(pcl::PointXYZINormal p1, pcl::PointXYZINormal p2) {
     float d = (p1.x - p2.x) * (p1.x - p2.x) + (p1.y - p2.y) * (p1.y - p2.y) + (p1.z - p2.z) * (p1.z - p2.z);
     return d;
 }

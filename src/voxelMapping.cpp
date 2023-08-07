@@ -127,25 +127,25 @@ vector<PointVector> Nearest_Points;
 vector<double> extrinT(3, 0.0);
 vector<double> extrinR(9, 0.0);
 std::deque<double> time_buffer;
-std::deque<PointCloudXYZRGBI::Ptr> lidar_buffer;
+std::deque<PointCloudXYZINormal::Ptr> lidar_buffer;
 std::deque<sensor_msgs::Imu::ConstPtr> imu_buffer;
 std::deque<sensor_msgs::ImageConstPtr> cam_buffer;
 
-PointCloudXYZRGBI::Ptr featsFromMap(new PointCloudXYZRGBI());
-PointCloudXYZRGBI::Ptr feats_undistort(new PointCloudXYZRGBI());
-PointCloudXYZRGBI::Ptr feats_down_body(new PointCloudXYZRGBI());
-PointCloudXYZRGBI::Ptr feats_down_world(new PointCloudXYZRGBI());
-PointCloudXYZRGBI::Ptr normvec(new PointCloudXYZRGBI(100000, 1));
+PointCloudXYZINormal::Ptr featsFromMap(new PointCloudXYZINormal());
+PointCloudXYZINormal::Ptr feats_undistort(new PointCloudXYZINormal());
+PointCloudXYZINormal::Ptr feats_down_body(new PointCloudXYZINormal());
+PointCloudXYZINormal::Ptr feats_down_world(new PointCloudXYZINormal());
+PointCloudXYZINormal::Ptr normvec(new PointCloudXYZINormal(100000, 1));
 // PointCloudXYZRGBI::Ptr laserCloudOri(new PointCloudXYZRGBI(100000, 1));
 // PointCloudXYZRGBI::Ptr corr_normvect(new PointCloudXYZRGBI(100000, 1));
-PointCloudXYZRGBI::Ptr _featsArray;
+PointCloudXYZINormal::Ptr _featsArray;
 std::vector<M3D> var_down_body;
 
-pcl::VoxelGrid<PointType> downSizeFilterSurf;
+pcl::VoxelGrid<pcl::PointXYZINormal> downSizeFilterSurf;
 
 std::vector<float> nn_dist_in_feats;
 std::vector<float> nn_plane_std;
-PointCloudXYZRGBI::Ptr feats_with_correspondence(new PointCloudXYZRGBI());
+PointCloudXYZINormal::Ptr feats_with_correspondence(new PointCloudXYZINormal());
 
 V3F XAxisPoint_body(LIDAR_SP_LEN, 0.0, 0.0);
 V3F XAxisPoint_world(LIDAR_SP_LEN, 0.0, 0.0);
@@ -209,6 +209,16 @@ void pointBodyToWorld_ikfom(PointType const *const pi, PointType *const po, stat
     po->rgba = pi->rgba;
 }
 
+void pointBodyToWorld_ikfom(pcl::PointXYZINormal const *const pi, pcl::PointXYZINormal *const po, state_ikfom &s) {
+    V3D p_body(pi->x, pi->y, pi->z);
+    V3D p_global(s.rot * (s.offset_R_L_I * p_body + s.offset_T_L_I) + s.pos);
+
+    po->x = p_global(0);
+    po->y = p_global(1);
+    po->z = p_global(2);
+    po->intensity = pi->intensity;
+}
+
 void pointBodyToWorld(PointType const *const pi, PointType *const po) {
     V3D p_body(pi->x, pi->y, pi->z);
     V3D p_global(state_point.rot * (state_point.offset_R_L_I * p_body + state_point.offset_T_L_I) + state_point.pos);
@@ -241,6 +251,26 @@ void RGBpointBodyToWorld(PointType const *const pi, PointType *const po) {
     po->rgba = pi->rgba;
 }
 
+void RGBpointBodyToWorld(pcl::PointXYZINormal const *const pi, pcl::PointXYZINormal *const po) {
+    V3D p_body(pi->x, pi->y, pi->z);
+    V3D p_global(state_point.rot * (state_point.offset_R_L_I * p_body + state_point.offset_T_L_I) + state_point.pos);
+
+    po->x = p_global(0);
+    po->y = p_global(1);
+    po->z = p_global(2);
+    po->intensity = pi->intensity;
+}
+
+// void RGBpointBodyToWorld(pcl::PointXYZRGBINormal const *const pi, pcl::PointXYZRGBINormal *const po) {
+//     V3D p_body(pi->x, pi->y, pi->z);
+//     V3D p_global(state_point.rot * (state_point.offset_R_L_I * p_body + state_point.offset_T_L_I) + state_point.pos);
+
+//     po->x = p_global(0);
+//     po->y = p_global(1);
+//     po->z = p_global(2);
+//     po->intensity = pi->intensity;
+// }
+
 void RGBpointBodyLidarToIMU(PointType const *const pi, PointType *const po) {
     V3D p_body_lidar(pi->x, pi->y, pi->z);
     V3D p_body_imu(state_point.offset_R_L_I * p_body_lidar + state_point.offset_T_L_I);
@@ -254,6 +284,16 @@ void RGBpointBodyLidarToIMU(PointType const *const pi, PointType *const po) {
     po->normal_x = pi->normal_x;
 }
 
+void RGBpointBodyLidarToIMU(pcl::PointXYZINormal const *const pi, pcl::PointXYZINormal *const po) {
+    V3D p_body_lidar(pi->x, pi->y, pi->z);
+    V3D p_body_imu(state_point.offset_R_L_I * p_body_lidar + state_point.offset_T_L_I);
+
+    po->x = p_body_imu(0);
+    po->y = p_body_imu(1);
+    po->z = p_body_imu(2);
+    po->intensity = pi->intensity;
+}
+
 void standard_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg) {
     auto time_offset = lidar_time_offset;
     //    std::printf("lidar offset:%f\n", lidar_time_offset);
@@ -265,7 +305,7 @@ void standard_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg) {
         lidar_buffer.clear();
     }
 
-    PointCloudXYZRGBI::Ptr ptr(new PointCloudXYZRGBI());
+    PointCloudXYZINormal::Ptr ptr(new PointCloudXYZINormal());
     p_pre->process(msg, ptr);
     lidar_buffer.push_back(ptr);
     time_buffer.push_back(msg->header.stamp.toSec() + time_offset);
@@ -297,7 +337,7 @@ void livox_pcl_cbk(const livox_ros_driver::CustomMsg::ConstPtr &msg) {
         printf("Self sync IMU and LiDAR, time diff is %.10lf \n", timediff_lidar_wrt_imu);
     }
 
-    PointCloudXYZRGBI::Ptr ptr(new PointCloudXYZRGBI());
+    PointCloudXYZINormal::Ptr ptr(new PointCloudXYZINormal());
     p_pre->process(msg, ptr);
     lidar_buffer.push_back(ptr);
     time_buffer.push_back(last_timestamp_lidar);
@@ -455,16 +495,16 @@ bool sync_packages(MeasureGroup &meas) {
     return true;
 }
 
-PointCloudXYZRGBI::Ptr pcl_wait_pub(new PointCloudXYZRGBI(500000, 1));
-PointCloudXYZRGBI::Ptr pcl_wait_save(new PointCloudXYZRGBI());
+PointCloudXYZINormal::Ptr pcl_wait_pub(new PointCloudXYZINormal(500000, 1));
+PointCloudXYZINormal::Ptr pcl_wait_save(new PointCloudXYZINormal());
 
 void publish_frame_world(const ros::Publisher &pubLaserCloudFull) {
     if (scan_pub_en) {
-        PointCloudXYZRGBI::Ptr laserCloudFullRes(dense_pub_en ? feats_undistort : feats_down_body);
+        PointCloudXYZINormal::Ptr laserCloudFullRes(dense_pub_en ? feats_undistort : feats_down_body);
         int size = laserCloudFullRes->points.size();
-        PointCloudXYZRGBI laserCloudWorld;
+        PointCloudXYZINormal laserCloudWorld;
         for (int i = 0; i < size; i++) {
-            PointType const *const p = &laserCloudFullRes->points[i];
+            pcl::PointXYZINormal const *const p = &laserCloudFullRes->points[i];
             if (p->intensity < 5) {
                 continue;
             }
@@ -473,7 +513,7 @@ void publish_frame_world(const ros::Publisher &pubLaserCloudFull) {
             //                            and p->z < 2 and p->z > -1) {
             //                continue;
             //            }
-            PointType p_world;
+            pcl::PointXYZINormal p_world;
 
             RGBpointBodyToWorld(p, &p_world);
             //            if (p_world.z > 1) {
@@ -497,8 +537,8 @@ void publish_frame_world(const ros::Publisher &pubLaserCloudFull) {
     /* 2. noted that pcd save will influence the real-time performences **/
     if (save_cloud_lio_pcd) {
         int size = feats_undistort->points.size();
-        PointCloudXYZRGBI::Ptr laserCloudWorld(
-            new PointCloudXYZRGBI(size, 1));
+        PointCloudXYZINormal::Ptr laserCloudWorld(
+            new PointCloudXYZINormal(size, 1));
 
 #pragma omp parallel for
         for (int i = 0; i < size; i++) {
@@ -523,9 +563,9 @@ void publish_frame_world(const ros::Publisher &pubLaserCloudFull) {
 
 void publish_frame_body(const ros::Publisher &pubLaserCloudFull_body) {
     //    int size = feats_undistort->points.size();
-    PointCloudXYZRGBI::Ptr laserCloudFullRes(dense_pub_en ? feats_undistort : feats_down_body);
+    PointCloudXYZINormal::Ptr laserCloudFullRes(dense_pub_en ? feats_undistort : feats_down_body);
     int size = laserCloudFullRes->points.size();
-    PointCloudXYZRGBI::Ptr laserCloudIMUBody(new PointCloudXYZRGBI(size, 1));
+    PointCloudXYZINormal::Ptr laserCloudIMUBody(new PointCloudXYZINormal(size, 1));
     for (int i = 0; i < size; i++) {
         RGBpointBodyLidarToIMU(&laserCloudFullRes->points[i],
                                &laserCloudIMUBody->points[i]);
@@ -626,6 +666,22 @@ void transformLidar(const state_ikfom &state_point, const PointCloudXYZRGBI::Ptr
     }
 }
 
+void transformLidar(const state_ikfom &state_point, const PointCloudXYZINormal::Ptr &input_cloud, PointCloudXYZINormal::Ptr &trans_cloud) {
+    trans_cloud->clear();
+    for (size_t i = 0; i < input_cloud->size(); i++) {
+        pcl::PointXYZINormal p_c = input_cloud->points[i];
+        Eigen::Vector3d p_lidar(p_c.x, p_c.y, p_c.z);
+        // HACK we need to specify p_body as a V3D type!!!
+        V3D p_body = state_point.rot * (state_point.offset_R_L_I * p_lidar + state_point.offset_T_L_I) + state_point.pos;
+        pcl::PointXYZINormal pi;
+        pi.x = p_body(0);
+        pi.y = p_body(1);
+        pi.z = p_body(2);
+        pi.intensity = p_c.intensity;
+        trans_cloud->points.push_back(pi);
+    }
+}
+
 // M3D transformLiDARCovToWorld(Eigen::Vector3d &p_lidar, const esekfom::esekf<state_ikfom, 12, input_ikfom>& kf, const Eigen::Matrix3d& COV_lidar)
 //{
 //     double match_start = omp_get_wtime();
@@ -690,7 +746,7 @@ void observation_model_share(state_ikfom &s, esekfom::dyn_share_datastruct<doubl
     // =================================================================================================================
     // 用当前迭代轮最新的位姿估计值 将点云转换到world地图系
     vector<pointWithCov> pv_list;
-    PointCloudXYZRGBI::Ptr world_lidar(new PointCloudXYZRGBI);
+    PointCloudXYZINormal::Ptr world_lidar(new PointCloudXYZINormal);
     // FIXME stupid mistake 这里应该用迭代的最新线性化点
     // FIXME stupid mistake 这里应该用迭代的最新线性化点
     //    transformLidar(state_point, feats_down_body, world_lidar);
@@ -911,7 +967,7 @@ int main(int argc, char **argv) {
     nh.param<int>("preprocess/scan_rate", p_pre->SCAN_RATE, 10);
     nh.param<int>("preprocess/point_filter_num", p_pre->point_filter_num, 1);
     nh.param<bool>("preprocess/feature_extract_enable", p_pre->feature_enabled, false);
-    cout << "p_pre->lidar_type " << p_pre->lidar_type << endl;
+    LOG_S(INFO) << "p_pre->lidar_type " << p_pre->lidar_type << endl;
     for (int i = 0; i < layer_point_size.size(); i++) {
         layer_size.push_back(layer_point_size[i]);
     }
@@ -923,7 +979,7 @@ int main(int argc, char **argv) {
     int effect_feat_num = 0, frame_num = 0;
     bool flg_EKF_converged, EKF_stop_flg = 0;
 
-    _featsArray.reset(new PointCloudXYZRGBI());
+    _featsArray.reset(new PointCloudXYZINormal());
 
     memset(point_selected_surf, true, sizeof(point_selected_surf));
     memset(res_last, -1000.0f, sizeof(res_last));
@@ -1030,7 +1086,7 @@ int main(int argc, char **argv) {
             // ===============================================================================================================
             // 第一帧 如果ekf初始化了 就初始化voxel地图
             if (flg_EKF_inited && !init_map) {
-                PointCloudXYZRGBI::Ptr world_lidar(new PointCloudXYZRGBI);
+                PointCloudXYZINormal::Ptr world_lidar(new PointCloudXYZINormal);
                 transformLidar(state_point, feats_undistort, world_lidar);
                 std::vector<pointWithCov> pv_list;
 
@@ -1110,17 +1166,19 @@ int main(int argc, char **argv) {
             geoQuat.w = state_point.rot.coeffs()[3];
             publish_odometry(pubOdomAftMapped);
             //
-            std::printf("BA: %.4f %.4f %.4f   BG: %.4f %.4f %.4f   g: %.4f %.4f %.4f\n",
-                        kf.get_x().ba.x(), kf.get_x().ba.y(), kf.get_x().ba.z(),
-                        kf.get_x().bg.x(), kf.get_x().bg.y(), kf.get_x().bg.z(),
-                        kf.get_x().grav.get_vect().x(), kf.get_x().grav.get_vect().y(), kf.get_x().grav.get_vect().z());
+            if (common::debug_en) {
+                std::printf("BA: %.4f %.4f %.4f   BG: %.4f %.4f %.4f   g: %.4f %.4f %.4f\n",
+                            kf.get_x().ba.x(), kf.get_x().ba.y(), kf.get_x().ba.z(),
+                            kf.get_x().bg.x(), kf.get_x().bg.y(), kf.get_x().bg.z(),
+                            kf.get_x().grav.get_vect().x(), kf.get_x().grav.get_vect().y(), kf.get_x().grav.get_vect().z());
+            }
 
             // ===============================================================================================================
             // 更新地图
             /*** add the points to the voxel map ***/
             // 用最新的状态估计将点及点的covariance转换到world系
             std::vector<pointWithCov> pv_list;
-            PointCloudXYZRGBI::Ptr world_lidar(new PointCloudXYZRGBI);
+            PointCloudXYZINormal::Ptr world_lidar(new PointCloudXYZINormal);
             transformLidar(state_point, feats_down_body, world_lidar);
             for (size_t i = 0; i < feats_down_body->size(); i++) {
                 // 保存body系和world系坐标
@@ -1149,7 +1207,9 @@ int main(int argc, char **argv) {
             sum_update_time += t_update_end - t_update_start;
 
             scan_index++;
+            if (common::debug_en){
             std::printf("Mean  Topt: %.5fs   Tu: %.5fs\n", sum_optimize_time / scan_index, sum_update_time / scan_index);
+            }
             // ===============================================================================================================
             // 可视化相关的shit
             /******* Publish odometry *******/
