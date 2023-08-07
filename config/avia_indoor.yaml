@@ -4,6 +4,7 @@ common:
     #    imu_topic:  "/livox/imu"
     time_sync_en: false         # ONLY turn on when external time synchronization is really not possible
     time_diff_lidar_to_imu: 0.0
+    debug: false
 
 camera:
     image_topic: "/lauda"
@@ -71,6 +72,7 @@ noise_model:
     # b_gyr_cov: 0.0001
 
 publish:
+    pub_color_map: false
     pub_voxel_map: false
     publish_max_voxel_layer: 2         # only publish 0,1,2 layer's plane
     path_en:  true

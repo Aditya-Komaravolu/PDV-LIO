@@ -64,6 +64,7 @@
 
 #include "IMU_Processing.hpp"
 #include "calibration_data.hpp"
+#include "common.hpp"
 #include "loguru.hpp"
 #include "openmvs_utils.hpp"
 #include "preprocess.h"
@@ -168,6 +169,7 @@ double angle_cov = 0.0;
 std::vector<double> layer_point_size;
 
 bool publish_voxel_map = false;
+bool publish_color_map = false;
 int publish_max_voxel_layer = 0;
 
 std::unordered_map<VOXEL_LOC, OctoTree *> voxel_map;
@@ -437,8 +439,10 @@ bool sync_packages(MeasureGroup &meas) {
     // meas.rgb_cam_1.push_back(rgb_cam_1_buffer.front());
     // rgb_cam_1_buffer.pop_front();
     if (!meas.cam.empty()) {
-        LOG_S(INFO) << "rgb frames in queue: " << meas.cam.size() << std::endl;
-        LOG_S(INFO) << "current frame index: " << colored_map::colored_frame_index << std::endl;
+        if (common::debug_en) {
+            LOG_S(INFO) << "rgb frames in queue: " << meas.cam.size() << std::endl;
+            LOG_S(INFO) << "current frame index: " << colored_map::colored_frame_index << std::endl;
+        }
 
         auto diff_time = meas.cam.back()->header.stamp.toSec() - time_buffer.front();
         // LOG_S(WARNING) << "diff time" << diff_time << std::endl;
@@ -496,6 +500,7 @@ void publish_frame_world(const ros::Publisher &pubLaserCloudFull) {
         PointCloudXYZRGBI::Ptr laserCloudWorld(
             new PointCloudXYZRGBI(size, 1));
 
+#pragma omp parallel for
         for (int i = 0; i < size; i++) {
             RGBpointBodyToWorld(&feats_undistort->points[i],
                                 &laserCloudWorld->points[i]);
@@ -762,10 +767,10 @@ void observation_model_share(state_ikfom &s, esekfom::dyn_share_datastruct<doubl
 //        total_residual += fabs(dis);
 //    }
 //    assert(laserCloudOri->size() == effct_feat_num && corr_normvect->size() == effct_feat_num);
-#ifdef MP_EN
-    omp_set_num_threads(MP_PROC_NUM);
+// #ifdef MP_EN
+//     omp_set_num_threads(MP_PROC_NUM);
+// #endif
 #pragma omp parallel for
-#endif
     for (int i = 0; i < effct_feat_num; i++) {
         //        const PointType &laser_p  = laserCloudOri->points[i];
         V3D point_this_be(ptpl_list[i].point);
@@ -870,6 +875,8 @@ int main(int argc, char **argv) {
     nh.param<bool>("save/cloud_ply", save_cloud_ply_en, false);
     nh.param<bool>("save/cloud_lio_pcd", save_cloud_lio_pcd, false);
 
+    nh.param<bool>("common/debug", common::debug_en, false);
+
     // mapping algorithm params
     nh.param<float>("mapping/det_range", DET_RANGE, 300.f);
     nh.param<int>("mapping/max_iteration", NUM_MAX_ITERATIONS, 4);
@@ -896,6 +903,7 @@ int main(int argc, char **argv) {
     // visualization params
     nh.param<bool>("publish/pub_voxel_map", publish_voxel_map, false);
     nh.param<int>("publish/publish_max_voxel_layer", publish_max_voxel_layer, 0);
+    nh.param<bool>("publish/pub_color_map", publish_color_map, false);
 
     nh.param<double>("preprocess/blind", p_pre->blind, 0.01);
     nh.param<int>("preprocess/lidar_type", p_pre->lidar_type, AVIA);
@@ -957,8 +965,10 @@ int main(int argc, char **argv) {
 
     // coloring service
     ros::Publisher pubLaserCloudColor = nh.advertise<sensor_msgs::PointCloud2>("/cloud_colour", 100000);
-    std::thread pub_rgb_task(color_service::service_pub_rgb_maps, nh);
-    pub_rgb_task.detach();
+    if (publish_color_map) {
+        std::thread pub_rgb_task(color_service::service_pub_rgb_maps, nh);
+        pub_rgb_task.detach();
+    }
     //------------------------------------------------------------------------------------------------------
 
     std::ofstream pose_file;

@@ -297,8 +297,8 @@ void color_point_cloud(state_ikfom state_point, ros::Publisher pubLaserCloudColo
             latest_img_time);
         colored_map::m_map_rgb_pts.m_last_updated_frame_idx = colored_map::colored_frame_index;
     }
-    color_service::publish_render_pts(
-        pubLaserCloudColor,
-        colored_map::m_map_rgb_pts);
+    // color_service::publish_render_pts(
+    //     pubLaserCloudColor,
+    //     colored_map::m_map_rgb_pts);
 }
 }  // namespace color_service

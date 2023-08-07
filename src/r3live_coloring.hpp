@@ -392,12 +392,12 @@ void save_image_and_pose(const state_ikfom state_point, cv::Mat image_to_save, s
     // Save quaternion and translation to a txt file based on the camera frame index
     std::string txt_file_name = std::string(save_path).append(".txt");
     std::string image_file_name = std::string(save_path).append(".png");
-    FILE *fp = fopen(txt_file_name.c_str(), "w+");
-    if (fp) {
-        fprintf(fp, "%lf %lf %lf %lf %lf %lf %lf\r\n", q.w(), q.x(), q.y(), q.z(),
-                trans_wrt_cam(0), trans_wrt_cam(1), trans_wrt_cam(2));
-        fclose(fp);
-    }
+    // FILE *fp = fopen(txt_file_name.c_str(), "w+");
+    // if (fp) {
+    //     fprintf(fp, "%lf %lf %lf %lf %lf %lf %lf\r\n", q.w(), q.x(), q.y(), q.z(),
+    //             trans_wrt_cam(0), trans_wrt_cam(1), trans_wrt_cam(2));
+    //     fclose(fp);
+    // }
     // print the mats
 
     // std::cout<<"cam 1 extrinsic mat "<<cam_1_extrinsicMat_RT<<std::endl;
