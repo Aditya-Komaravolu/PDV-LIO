@@ -51,6 +51,7 @@
 #include <sensor_msgs/PointCloud2.h>
 #include <so3_math.h>
 #include <std_srvs/SetBool.h>
+#include <std_srvs/Trigger.h>
 #include <tf/transform_broadcaster.h>
 #include <tf/transform_datatypes.h>
 #include <unistd.h>
@@ -917,6 +918,36 @@ bool set_kill_on_finish(std_srvs::SetBool::Request &req, std_srvs::SetBool::Resp
     return true;
 }
 
+bool save_color_cloud_svc_cbk(std_srvs::Trigger::Request &req, std_srvs::Trigger::Response &res) {
+    try {
+        colored_map::save_map(save_base_path, true, false);
+    } catch (...) {
+        res.success = false;
+    }
+
+    res.success = true;
+    res.message = "saved color pcd in " + save_base_path;
+
+    return true;
+}
+
+bool save_lio_cloud_svc_cbk(std_srvs::Trigger::Request &req, std_srvs::Trigger::Response &res) {
+    try {
+        string file_name = save_base_path + "/scans.pcd";
+        string all_points_dir(file_name);
+        pcl::PCDWriter pcd_writer;
+        LOG_S(INFO) << "current lio only scan saved to " << file_name << endl;
+        pcd_writer.writeBinary(all_points_dir, *pcl_wait_save);
+
+        res.message = "saving lio pcd to " + file_name;
+    } catch (...) {
+        res.success = false;
+    }
+    res.success = true;
+
+    return true;
+}
+
 int main(int argc, char **argv) {
     loguru::init(argc, argv);
     ros::init(argc, argv, "laserMapping");
@@ -1046,6 +1077,8 @@ int main(int argc, char **argv) {
     // ros service to set exit when buffer is finished
     ros::ServiceServer kill_when_done_svc = nh.advertiseService("set_kill_on_finish", set_kill_on_finish);
 
+    ros::ServiceServer save_lio_cloud_svc = nh.advertiseService("save_lio_cloud", save_lio_cloud_svc_cbk);
+    ros::ServiceServer save_color_cloud_svc = nh.advertiseService("save_color_cloud", save_color_cloud_svc_cbk);
     //------------------------------------------------------------------------------------------------------
 
     std::ofstream pose_file;

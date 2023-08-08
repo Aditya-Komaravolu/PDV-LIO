@@ -222,6 +222,20 @@ Thanks to Xiaokai for his help with deriving the covariance propagation.
 catkin_make -DCMAKE_BUILD_TYPE=Release
 ```
 
+Set Kill On Queue Finish
+
 ```
 rosservice call /set_kill_on_finish "data: true"
+```
+
+Dump Colored PCD
+
+```
+rosservice call /save_color_cloud "{}"
+```
+
+Dump LIO PCD
+
+```
+rosservice call /save_lio_cloud "{}"
 ```
