@@ -103,6 +103,7 @@ double time_diff_lidar_to_imu = 0.0;
 
 string map_file_path, lid_topic, imu_topic, cam_topic, pcd_save_path;
 double last_timestamp_lidar = 0, last_cam_timestamp = 0, last_timestamp_imu = -1.0;
+double last_imu_processed_time = -1.0;
 
 float res_last[100000] = {0.0};
 float DET_RANGE = 300.0f;
@@ -406,6 +407,7 @@ void imu_cbk(const sensor_msgs::Imu::ConstPtr &msg_in) {
     //    }
 
     last_timestamp_imu = timestamp;
+    last_imu_processed_time = ros::Time::now().toSec();
 
     mtx_buffer.lock();
 
@@ -421,6 +423,7 @@ int scan_num = 0;
 /// @return is_synced, buffer_empty
 std::tuple<bool, bool> sync_packages(MeasureGroup &meas) {
     if (lidar_buffer.empty() || imu_buffer.empty() || cam_buffer.empty()) {
+        LOG_S(WARNING) << "QUEUE EMPTY!" << std::endl;
         return std::make_tuple(false, true);
     }
 
@@ -460,7 +463,21 @@ std::tuple<bool, bool> sync_packages(MeasureGroup &meas) {
     }
 
     if (last_timestamp_imu < lidar_end_time) {
-        return std::make_tuple(false, false);
+        LOG_S(WARNING) << "lidar time > imu time" << std::endl;
+        if (common::debug_en) {
+            LOG_S(INFO) << "lidar_buffer: " << lidar_buffer.size() << " , imu_buffer: " << imu_buffer.size() << " , cam_buffer: " << cam_buffer.size() << std::endl;
+        }
+        // if its more than 1 minute since last imu push then mark the queue as finished
+        // we'll ignore camera, as we dont get imu, there will be no mapping and camera is useless
+        bool imu_queue_finished = (ros::Time::now().toSec() - last_imu_processed_time) > 60;
+        std::stringstream stream;
+        stream << std::fixed << std::setprecision(10) << "imu_queue not pushed for 60secs, marking imu queue as finished"
+               << " last_imu_processed_time: " << last_imu_processed_time << " , current_time: " << ros::Time::now().toSec();
+
+        if (imu_queue_finished) {
+            LOG_S(ERROR) << stream.str() << std::endl;
+        }
+        return std::make_tuple(false, imu_queue_finished);
     }
 
     /*** push imu data, and pop from imu buffer ***/
@@ -498,6 +515,11 @@ std::tuple<bool, bool> sync_packages(MeasureGroup &meas) {
     lidar_buffer.pop_front();
     time_buffer.pop_front();
     lidar_pushed = false;
+
+    if (common::debug_en) {
+        LOG_S(INFO) << "lidar_buffer: " << lidar_buffer.size() << " , imu_buffer: " << imu_buffer.size() << " , cam_buffer: " << cam_buffer.size() << std::endl;
+    }
+
     return std::make_tuple(true, false);
 }
 
