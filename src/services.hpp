@@ -13,6 +13,7 @@
 #include "openmvs_utils.hpp"
 #include "r3live_coloring.hpp"
 #include "use-ikfom.hpp"
+#include "common.hpp"
 
 // #include "IMU_Processing.hpp"
 
@@ -211,9 +212,13 @@ void render_pts_in_voxels_mp(
     int numbers_of_voxels = colored_map::g_voxel_for_render.size();
     colored_map::render_pts_count = 0;
 
-    int num_of_threads = std::min(8 * 2, (int)numbers_of_voxels);
+    int num_of_threads = std::min(std::max((unsigned int)(8 * 2), std::thread::hardware_concurrency()), (unsigned int)numbers_of_voxels);
     // results.clear();
     results.resize(num_of_threads);
+
+    if (common::debug_en) {
+        LOG_S(INFO) << "using " << num_of_threads << " threads for voxel rendering" << std::endl;
+    }
 
     // #pragma omp parallel for
     std::vector<std::thread> render_threads;

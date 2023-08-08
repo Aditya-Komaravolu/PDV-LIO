@@ -221,3 +221,7 @@ Thanks to Xiaokai for his help with deriving the covariance propagation.
 ```
 catkin_make -DCMAKE_BUILD_TYPE=Release
 ```
+
+```
+rosservice call /set_kill_on_finish "data: true"
+```

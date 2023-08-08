@@ -50,6 +50,7 @@
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <so3_math.h>
+#include <std_srvs/SetBool.h>
 #include <tf/transform_broadcaster.h>
 #include <tf/transform_datatypes.h>
 #include <unistd.h>
@@ -121,6 +122,7 @@ int iterCount = 0, feats_down_size = 0, NUM_MAX_ITERATIONS = 0, laserCloudValidN
 bool point_selected_surf[100000] = {0};
 bool lidar_pushed, flg_first_scan = true, flg_exit = false, flg_EKF_inited;
 bool scan_pub_en = false, dense_pub_en = false, scan_body_pub_en = false;
+bool kill_on_finish = false;
 
 vector<vector<int>> pointSearchInd_surf;
 vector<PointVector> Nearest_Points;
@@ -413,9 +415,12 @@ void imu_cbk(const sensor_msgs::Imu::ConstPtr &msg_in) {
 
 double lidar_mean_scantime = 0.0;
 int scan_num = 0;
-bool sync_packages(MeasureGroup &meas) {
+/// @brief syncs lidar, imu and camera
+/// @param meas
+/// @return is_synced, buffer_empty
+std::tuple<bool, bool> sync_packages(MeasureGroup &meas) {
     if (lidar_buffer.empty() || imu_buffer.empty() || cam_buffer.empty()) {
-        return false;
+        return std::make_tuple(false, true);
     }
 
     /*** push a lidar scan ***/
@@ -454,7 +459,7 @@ bool sync_packages(MeasureGroup &meas) {
     }
 
     if (last_timestamp_imu < lidar_end_time) {
-        return false;
+        return std::make_tuple(false, false);
     }
 
     /*** push imu data, and pop from imu buffer ***/
@@ -492,7 +497,7 @@ bool sync_packages(MeasureGroup &meas) {
     lidar_buffer.pop_front();
     time_buffer.pop_front();
     lidar_pushed = false;
-    return true;
+    return std::make_tuple(true, false);
 }
 
 PointCloudXYZINormal::Ptr pcl_wait_pub(new PointCloudXYZINormal(500000, 1));
@@ -899,6 +904,19 @@ void observation_model_share(state_ikfom &s, esekfom::dyn_share_datastruct<doubl
     // std::printf("ef_num: %d\n", effct_feat_num);
 }
 
+bool set_kill_on_finish(std_srvs::SetBool::Request &req, std_srvs::SetBool::Response &res) {
+    if (req.data) {
+        kill_on_finish = true;
+        res.success = true;
+        res.message = "kill_on_finish is now set!";
+    } else {
+        res.success = false;
+        res.message = "kill_on_finish not changed";
+    }
+
+    return true;
+}
+
 int main(int argc, char **argv) {
     loguru::init(argc, argv);
     ros::init(argc, argv, "laserMapping");
@@ -1024,6 +1042,10 @@ int main(int argc, char **argv) {
         std::thread pub_rgb_task(color_service::service_pub_rgb_maps, nh);
         pub_rgb_task.detach();
     }
+
+    // ros service to set exit when buffer is finished
+    ros::ServiceServer kill_when_done_svc = nh.advertiseService("set_kill_on_finish", set_kill_on_finish);
+
     //------------------------------------------------------------------------------------------------------
 
     std::ofstream pose_file;
@@ -1064,7 +1086,19 @@ int main(int argc, char **argv) {
     while (status) {
         if (flg_exit) break;
         ros::spinOnce();
-        if (sync_packages(Measures)) {
+
+        auto [packages_synced, queue_empty] = sync_packages(Measures);
+
+        if (common::debug_en) {
+            LOG_S(INFO) << "packages synced: " << packages_synced << ", queue_empty: " << queue_empty << std::endl;
+        }
+
+        if (queue_empty and kill_on_finish) {
+            LOG_S(WARNING) << "kill_on_finish is set and queue is empty, gracefully exiting ..." << std::endl;
+            break;
+        }
+
+        if (packages_synced) {
             if (flg_first_scan) {
                 first_lidar_time = Measures.lidar_beg_time;
                 p_imu->first_lidar_time = first_lidar_time;
