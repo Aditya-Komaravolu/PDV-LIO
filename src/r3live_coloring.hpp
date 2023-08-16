@@ -7,6 +7,7 @@
 #include "calibration_data.hpp"
 #include "common_lib.h"
 #include "loguru.hpp"
+#include "use-ikfom.hpp"
 
 namespace coloring_config {
 const double image_obs_cov = 15;
@@ -332,7 +333,7 @@ struct global_map {
         for (long i = pt_size - 1; i > 0; i--)
         // for (int i = 0; i  <  pt_size; i++)
         {
-            if (i % 1000 == 0) {
+            if (i % 20000 == 0) {
                 LOG_S(INFO) << "saving rgb cloud map " << (int)((pt_size - 1 - i) * 100.0 / (pt_size - 1)) << " % ...\r";
             }
 

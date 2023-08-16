@@ -67,10 +67,15 @@ include_directories(
 #  FILES
 #  Pose6D.msg
 #)
+add_service_files(
+  FILES
+  SetFloat.srv
+)
 
 generate_messages(
  DEPENDENCIES
  geometry_msgs
+ std_msgs
 )
 
 catkin_package(
@@ -82,6 +87,26 @@ catkin_package(
 add_executable(pv_lio_node src/voxelMapping.cpp src/preprocess.cpp src/calibration_data.hpp src/openmvs_utils.hpp src/r3live_coloring.hpp src/services.hpp src/loguru.cpp src/loguru.hpp src/common.hpp)
 target_link_libraries(pv_lio_node ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${PYTHON_LIBRARIES} stdc++fs ${Boost_LIBRARIES} ${Boost_FILESYSTEM_LIBRARY} ${Boost_SERIALIZATION_LIBRARY})
 target_include_directories(pv_lio_node PRIVATE ${PYTHON_INCLUDE_DIRS})
+
+add_executable(
+  segment_pc
+  src/segment_pc/main.cpp
+  src/loguru.cpp src/loguru.hpp
+  src/calibration_data.hpp
+  src/r3live_coloring.hpp
+)
+
+target_link_libraries(
+  segment_pc
+  ${catkin_LIBRARIES}
+  ${PCL_LIBRARIES}
+  ${PYTHON_LIBRARIES}
+)
+
+target_include_directories(
+  segment_pc
+  PRIVATE ${PYTHON_INCLUDE_DIRS}
+)
 
 # add_executable(pandar_to_velodyne src/converter/pandar_to_velodyne.cpp)
 # target_link_libraries(pandar_to_velodyne ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${PYTHON_LIBRARIES})

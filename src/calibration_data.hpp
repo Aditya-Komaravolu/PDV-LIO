@@ -28,13 +28,13 @@ class camera_t {
         extrinsicMat_T = cv::Mat(3, 1, cv::DataType<double>::type);
     }
 
-    void init(ros::NodeHandle nh) {
+    void init(ros::NodeHandle& nh) {
         std::vector<double> extrinsicRT;
         std::vector<double> intrinsic;
         std::vector<double> distCoeff;
-        nh.param<std::vector<double>>("camera/extrinsic_RT", extrinsicRT, vector<double>());
-        nh.param<std::vector<double>>("camera/intrinsic", intrinsic, vector<double>());
-        nh.param<std::vector<double>>("camera/distCoeff", distCoeff, vector<double>());
+        nh.param<std::vector<double>>("camera/extrinsic_RT", extrinsicRT, std::vector<double>());
+        nh.param<std::vector<double>>("camera/intrinsic", intrinsic, std::vector<double>());
+        nh.param<std::vector<double>>("camera/distCoeff", distCoeff, std::vector<double>());
 
         this->load_camera_params(extrinsicRT, intrinsic, distCoeff);
     }

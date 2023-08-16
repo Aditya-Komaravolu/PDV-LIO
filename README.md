@@ -239,3 +239,9 @@ Dump LIO PCD
 ```
 rosservice call /save_lio_cloud "{}"
 ```
+
+Set Voxel Size
+
+```
+rosservice call /set_voxel_size "data: 10.0"
+```

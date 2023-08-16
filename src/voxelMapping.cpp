@@ -70,6 +70,7 @@
 #include "loguru.hpp"
 #include "openmvs_utils.hpp"
 #include "preprocess.h"
+#include "pv_lio/SetFloat.h"
 #include "r3live_coloring.hpp"
 #include "services.hpp"
 #include "voxel_map_util.hpp"
@@ -171,6 +172,8 @@ std::vector<int> layer_size;
 double ranging_cov = 0.0;
 double angle_cov = 0.0;
 std::vector<double> layer_point_size;
+
+bool enable_coloring;
 
 bool publish_voxel_map = false;
 bool publish_color_map = false;
@@ -352,7 +355,9 @@ void livox_pcl_cbk(const livox_ros_driver::CustomMsg::ConstPtr &msg) {
 }
 
 void rgb_cam_cbk(const sensor_msgs::ImageConstPtr &msg) {
+    // LOG_S(WARNING) << "RGB_CAM_CBK LOCK" << std::endl;
     mtx_buffer.lock();
+    // LOG_S(WARNING) << "RGB CAM CBK" << std::endl;
     if (msg->header.stamp.toSec() < last_cam_timestamp) {
         ROS_ERROR("RGB error loop back, clear buffer");
         cam_buffer.clear();
@@ -422,9 +427,17 @@ int scan_num = 0;
 /// @param meas
 /// @return is_synced, buffer_empty
 std::tuple<bool, bool> sync_packages(MeasureGroup &meas) {
-    if (lidar_buffer.empty() || imu_buffer.empty() || cam_buffer.empty()) {
-        LOG_S(WARNING) << "QUEUE EMPTY!" << std::endl;
-        return std::make_tuple(false, true);
+    if (enable_coloring) {
+        if (lidar_buffer.empty() || imu_buffer.empty() || cam_buffer.empty()) {
+            LOG_S(WARNING) << "QUEUE EMPTY! COLORING ENABLED" << std::endl;
+            LOG_S(INFO) << "lidar_buffer: " << lidar_buffer.size() << " , imu_buffer: " << imu_buffer.size() << " , cam_buffer: " << cam_buffer.size() << std::endl;
+            return std::make_tuple(false, true);
+        }
+    } else {
+        if (lidar_buffer.empty() || imu_buffer.empty()) {
+            LOG_S(WARNING) << "QUEUE EMPTY! COLORING NOT ENABLED" << std::endl;
+            return std::make_tuple(false, true);
+        }
     }
 
     /*** push a lidar scan ***/
@@ -489,27 +502,30 @@ std::tuple<bool, bool> sync_packages(MeasureGroup &meas) {
         meas.imu.push_back(imu_buffer.front());
         imu_buffer.pop_front();
     }
-    // Pushing RGB cam 1 image
-    double cam_time = cam_buffer.front()->header.stamp.toSec();
-    meas.cam.clear();
-    while ((!cam_buffer.empty()) && (cam_time < lidar_end_time)) {
-        // std::lock_guard<std::mutex> lock(mtx_buffer);
-        cam_time = cam_buffer.front()->header.stamp.toSec();
-        if (cam_time > lidar_end_time) break;
-        meas.cam.push_back(cam_buffer.front());
-        cam_buffer.pop_front();
-    }
-    // meas.rgb_cam_1.push_back(rgb_cam_1_buffer.front());
-    // rgb_cam_1_buffer.pop_front();
-    if (!meas.cam.empty()) {
-        if (common::debug_en) {
-            LOG_S(INFO) << "rgb frames in queue: " << meas.cam.size() << std::endl;
-            LOG_S(INFO) << "current frame index: " << colored_map::colored_frame_index << std::endl;
-        }
 
-        auto diff_time = meas.cam.back()->header.stamp.toSec() - time_buffer.front();
-        // LOG_S(WARNING) << "diff time" << diff_time << std::endl;
-        colored_map::colored_frame_index++;
+    if (enable_coloring) {
+        // Pushing RGB cam 1 image
+        double cam_time = cam_buffer.front()->header.stamp.toSec();
+        meas.cam.clear();
+        while ((!cam_buffer.empty()) && (cam_time < lidar_end_time)) {
+            // std::lock_guard<std::mutex> lock(mtx_buffer);
+            cam_time = cam_buffer.front()->header.stamp.toSec();
+            if (cam_time > lidar_end_time) break;
+            meas.cam.push_back(cam_buffer.front());
+            cam_buffer.pop_front();
+        }
+        // meas.rgb_cam_1.push_back(rgb_cam_1_buffer.front());
+        // rgb_cam_1_buffer.pop_front();
+        if (!meas.cam.empty()) {
+            if (common::debug_en) {
+                LOG_S(INFO) << "rgb frames in queue: " << meas.cam.size() << std::endl;
+                LOG_S(INFO) << "current frame index: " << colored_map::colored_frame_index << std::endl;
+            }
+
+            auto diff_time = meas.cam.back()->header.stamp.toSec() - time_buffer.front();
+            // LOG_S(WARNING) << "diff time" << diff_time << std::endl;
+            colored_map::colored_frame_index++;
+        }
     }
 
     lidar_buffer.pop_front();
@@ -940,6 +956,17 @@ bool set_kill_on_finish(std_srvs::SetBool::Request &req, std_srvs::SetBool::Resp
     return true;
 }
 
+bool set_voxel_size(pv_lio::SetFloat::Request &req, pv_lio::SetFloat::Response &res) {
+    LOG_S(INFO) << "setting voxel_size to " << req.data << std::endl;
+
+    max_voxel_size = req.data;
+
+    res.success = true;
+    res.message = "set voxel_size to " + std::to_string(req.data);
+
+    return true;
+}
+
 bool save_color_cloud_svc_cbk(std_srvs::Trigger::Request &req, std_srvs::Trigger::Response &res) {
     try {
         colored_map::save_map(save_base_path, true, false);
@@ -989,6 +1016,8 @@ int main(int argc, char **argv) {
     // camera params
     nh.param<std::string>("camera/image_topic", cam_topic, "/uncompressed_1");
 
+    LOG_S(WARNING) << "cam_topic: " << cam_topic << std::endl;
+
     // load camera data
     calibration_data::camera.init(nh);
 
@@ -1017,6 +1046,7 @@ int main(int argc, char **argv) {
     nh.param<bool>("mapping/extrinsic_est_en", extrinsic_est_en, true);
     nh.param<vector<double>>("mapping/extrinsic_T", extrinT, vector<double>());
     nh.param<vector<double>>("mapping/extrinsic_R", extrinR, vector<double>());
+    nh.param<bool>("mapping/enable_coloring", enable_coloring, true);
 
     // noise model params
     nh.param<double>("noise_model/ranging_cov", ranging_cov, 0.02);
@@ -1075,7 +1105,10 @@ int main(int argc, char **argv) {
     ros::Subscriber sub_imu = nh.subscribe(imu_topic, 200000, imu_cbk);
 
     image_transport::ImageTransport it(nh);
-    image_transport::Subscriber cam_sub = it.subscribe(cam_topic, 100, &rgb_cam_cbk);
+    image_transport::Subscriber cam_sub;
+    if (enable_coloring) {
+        cam_sub = it.subscribe(cam_topic, 10000, &rgb_cam_cbk);
+    }
 
     ros::Publisher pubLaserCloudFull = nh.advertise<sensor_msgs::PointCloud2>("/cloud_registered", 100000);
     ros::Publisher pubLaserCloudFull_body = nh.advertise<sensor_msgs::PointCloud2>("/cloud_registered_body", 100000);
@@ -1101,6 +1134,8 @@ int main(int argc, char **argv) {
 
     ros::ServiceServer save_lio_cloud_svc = nh.advertiseService("save_lio_cloud", save_lio_cloud_svc_cbk);
     ros::ServiceServer save_color_cloud_svc = nh.advertiseService("save_color_cloud", save_color_cloud_svc_cbk);
+
+    ros::ServiceServer set_voxel_size_svc = nh.advertiseService("set_voxel_size", set_voxel_size);
     //------------------------------------------------------------------------------------------------------
 
     std::ofstream pose_file;
@@ -1295,6 +1330,9 @@ int main(int argc, char **argv) {
             sum_update_time += t_update_end - t_update_start;
 
             scan_index++;
+
+            common::frame_index++;
+
             if (common::debug_en) {
                 std::printf("Mean  Topt: %.5fs   Tu: %.5fs\n", sum_optimize_time / scan_index, sum_update_time / scan_index);
             }
@@ -1307,12 +1345,14 @@ int main(int argc, char **argv) {
             //            map_incremental();
             //
 
-            color_service::color_point_cloud(
-                state_point,
-                pubLaserCloudColor,
-                Measures,
-                feats_undistort,
-                first_lidar_time);
+            if (enable_coloring) {
+                color_service::color_point_cloud(
+                    state_point,
+                    pubLaserCloudColor,
+                    Measures,
+                    feats_undistort,
+                    first_lidar_time);
+            }
 
             if (save_openmvs_file_en) {
                 openmvs_utils::save_state(
@@ -1322,20 +1362,19 @@ int main(int argc, char **argv) {
 
             if (save_hba_pose_en) {
                 pose_file << state_point.pos.x() << " " << state_point.pos.y() << " " << state_point.pos.z() << " " << state_point.rot.w() << " " << state_point.rot.x() << " " << state_point.rot.y() << " " << state_point.rot.z() << std::endl;
-                std::string filename = save_base_path + "/hba_dump/" + "pcd/" + to_string(count_) + ".pcd";
+                std::string filename = save_base_path + "/hba_dump/" + "pcd/" + to_string(common::frame_index) + ".pcd";
                 pcl::io::savePCDFileBinary(filename, *feats_undistort);
-                count_++;
             }
 
             // save_image_and_pose(camera_id, src_img, "/home/inkers/adit/fastlio_one_camera_mvs_added/debug/" + std::to_string(global_index));
-            if (save_image_and_pose_en) {
+            if (save_image_and_pose_en and enable_coloring) {
                 if (Measures.cam.size() > 0) {
                     sensor_msgs::ImageConstPtr latest_image_ptr = Measures.cam.back();
                     cv::Mat latest_img = cv_bridge::toCvShare(latest_image_ptr, "bgr8")->image;
                     colored_map::save_image_and_pose(
                         state_point,
                         latest_img,
-                        save_base_path + "/image_pose/" + std::to_string(colored_map::colored_frame_index));
+                        save_base_path + "/image_pose/fi_" + std::to_string(common::frame_index) + "_ci_" + std::to_string(colored_map::colored_frame_index));
                 }
             }
 
@@ -1362,7 +1401,7 @@ int main(int argc, char **argv) {
     if (save_openmvs_file_en) {
         openmvs_map::save_dump(save_base_path);
     }
-    if (save_cloud_pcd_en || save_cloud_ply_en) {
+    if (enable_coloring and (save_cloud_pcd_en || save_cloud_ply_en)) {
         colored_map::save_map(save_base_path, save_cloud_pcd_en, save_cloud_ply_en);
     }
 
@@ -1375,6 +1414,8 @@ int main(int argc, char **argv) {
         pcl::PCDWriter pcd_writer;
         LOG_S(INFO) << "current lio only scan saved to " << file_name << endl;
         pcd_writer.writeBinary(all_points_dir, *pcl_wait_save);
+        pcl::io::savePLYFileASCII(save_base_path + "/scans.ply", *pcl_wait_save);
+        pcl::io::savePCDFileASCII(save_base_path + "/scans2.pcd", *pcl_wait_save);
     }
 
     return EXIT_SUCCESS;

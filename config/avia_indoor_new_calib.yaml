@@ -4,14 +4,14 @@ common:
     #    imu_topic:  "/livox/imu"
     time_sync_en: false         # ONLY turn on when external time synchronization is really not possible
     time_diff_lidar_to_imu: 0.0
-    debug: true
+    debug: false
 
 camera:
-    image_topic: "/lauda"
+    image_topic: "/camera_out"
     extrinsic_RT: 
-            [0.00916854,-0.999785,-0.018603,-0.0349557,
-            0.411203,0.0207276,-0.911308,-0.0895141,
-            0.911498,0.000705758,0.411305,-0.00205266,
+            [0.00837535,-0.999735,-0.0214202,-0.0441428,
+            0.404159,0.0229777,-0.9144,-0.0305941,
+            0.91465,-0.000998744,0.404245,-0.0425551,
             0,0,0,1]
     intrinsic:
             [845.404257,    0.     ,  642.550484 ,
@@ -28,32 +28,42 @@ preprocess:
     point_filter_num: 1
 
 mapping:
-    down_sample_size: 0.05
-    max_iteration: 10
-    voxel_size: 0.1
+    # down_sample_size: 0.05
+    # max_iteration: 10
+    # voxel_size: 0.1
+    # down_sample_size: 0.2
+    # max_iteration: 10
+    # voxel_size: 0.1
+    # down_sample_size: 0.3
+    # max_iteration: 6
+    # voxel_size: 0.4
     # down_sample_size: 0.1
     # max_iteration: 4
     # voxel_size: 0.25
+    down_sample_size: 0.05
+    max_iteration: 10
+    voxel_size: 0.1
     max_layer: 4                # 4 layer, 0, 1, 2, 3
     layer_point_size: [ 5, 5, 5, 5, 5 ]
-    plannar_threshold: 0.01
-    max_points_size: 1000
-    max_cov_points_size: 1000
+    plannar_threshold: 0.008
+    max_points_size: 2000
+    max_cov_points_size: 2000
 
     enable_coloring: false
     fov_degree:    360
     det_range:     100.0
-    extrinsic_est_en:  false      # true: enable the online estimation of IMU-LiDAR extrinsic,
+    extrinsic_est_en:  true      # true: enable the online estimation of IMU-LiDAR extrinsic,
     extrinsic_T: [ 0.04165, 0.02326, -0.0284 ]
     extrinsic_R: [ 1, 0, 0,
                    0, 1, 0,
                    0, 0, 1]
 
+
 save:
-    base_path: "/home/inkers/satyajit/catkin_pv_lio/"
+    base_path: "/home/inkers/satyajit/catkin_pv_lio/testing"
     hba_pose_pcd: false
     image_and_pose: false
-    openmvs_file: true
+    openmvs_file: false
     cloud_pcd: true
     cloud_ply: true
     cloud_lio_pcd: true
