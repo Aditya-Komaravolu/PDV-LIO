@@ -1331,8 +1331,6 @@ int main(int argc, char **argv) {
 
             scan_index++;
 
-            common::frame_index++;
-
             if (common::debug_en) {
                 std::printf("Mean  Topt: %.5fs   Tu: %.5fs\n", sum_optimize_time / scan_index, sum_update_time / scan_index);
             }
@@ -1377,6 +1375,8 @@ int main(int argc, char **argv) {
                         save_base_path + "/image_pose/fi_" + std::to_string(common::frame_index) + "_ci_" + std::to_string(colored_map::colored_frame_index));
                 }
             }
+
+            common::frame_index++;
 
             /******* Publish points *******/
             if (path_en) publish_path(pubPath);
