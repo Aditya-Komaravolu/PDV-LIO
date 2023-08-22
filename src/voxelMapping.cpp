@@ -58,7 +58,7 @@
 
 #include <Eigen/Core>
 #include <csignal>
-#include <experimental/filesystem>
+#include <filesystem>
 #include <fstream>
 #include <mutex>
 #include <opencv2/opencv.hpp>
@@ -80,7 +80,7 @@
 #define MAXN (720000)
 #define PUBFRAME_PERIOD (20)
 
-namespace filesystem = std::experimental::filesystem;
+namespace filesystem = std::filesystem;
 
 /**
  * OpenMVS Dump Settings
@@ -189,6 +189,7 @@ vect3 pos_lid;
 
 nav_msgs::Path path;
 nav_msgs::Odometry odomAftMapped;
+nav_msgs::Odometry cameraOdomAftMapped;
 geometry_msgs::Quaternion geoQuat;
 geometry_msgs::PoseStamped msg_body_pose;
 
@@ -678,6 +679,56 @@ void publish_odometry(const ros::Publisher &pubOdomAftMapped) {
     br_world.sendTransform(tf::StampedTransform(transform, odomAftMapped.header.stamp, "world", "camera_init"));
 }
 
+void publish_camera_odometry(const ros::Publisher &pubCameraOdomAftMapped) {
+    cameraOdomAftMapped.header.frame_id = "camera_init";
+    cameraOdomAftMapped.child_frame_id = "body";
+    cameraOdomAftMapped.header.stamp = ros::Time().fromSec(lidar_end_time);  // ros::Time().fromSec(lidar_end_time);
+    set_posestamp(cameraOdomAftMapped.pose);
+
+    auto position = cameraOdomAftMapped.pose.pose.position;
+    auto orientation = cameraOdomAftMapped.pose.pose.orientation;
+
+    Eigen::Vector3d cur_pos(position.x, position.y, position.z);
+    Eigen::Quaterniond cur_quat(orientation.w, orientation.x, orientation.y, orientation.z);
+
+    auto rot_mat = cur_quat.toRotationMatrix();
+
+    auto rot_wrt_cam = rot_mat * calibration_data::camera.extrinsicMat_R_eigen.inverse();
+    auto trans_wrt_cam = rot_mat * calibration_data::camera.extrinsicMat_T_eigen + cur_pos;
+
+    Eigen::Quaterniond q;
+    q = Eigen::Quaterniond(rot_wrt_cam);
+
+    cameraOdomAftMapped.pose.pose.position.x = trans_wrt_cam.x();
+    cameraOdomAftMapped.pose.pose.position.y = trans_wrt_cam.y();
+    cameraOdomAftMapped.pose.pose.position.z = trans_wrt_cam.z();
+    cameraOdomAftMapped.pose.pose.orientation.w = q.w();
+    cameraOdomAftMapped.pose.pose.orientation.x = q.x();
+    cameraOdomAftMapped.pose.pose.orientation.y = q.y();
+    cameraOdomAftMapped.pose.pose.orientation.z = q.z();
+    // apply camera transform
+    pubCameraOdomAftMapped.publish(cameraOdomAftMapped);
+
+    static tf::TransformBroadcaster br;
+    tf::Transform transform;
+    tf::Quaternion tq;
+    transform.setOrigin(tf::Vector3(cameraOdomAftMapped.pose.pose.position.x,
+                                    cameraOdomAftMapped.pose.pose.position.y,
+                                    cameraOdomAftMapped.pose.pose.position.z));
+    tq.setW(cameraOdomAftMapped.pose.pose.orientation.w);
+    tq.setX(cameraOdomAftMapped.pose.pose.orientation.x);
+    tq.setY(cameraOdomAftMapped.pose.pose.orientation.y);
+    tq.setZ(cameraOdomAftMapped.pose.pose.orientation.z);
+    transform.setRotation(tq);
+    br.sendTransform(tf::StampedTransform(transform, cameraOdomAftMapped.header.stamp, "camera_init", "body"));
+
+    static tf::TransformBroadcaster br_world;
+    transform.setOrigin(tf::Vector3(0, 0, 0));
+    tq.setValue(p_imu->Initial_R_wrt_G.x(), p_imu->Initial_R_wrt_G.y(), p_imu->Initial_R_wrt_G.z(), p_imu->Initial_R_wrt_G.w());
+    transform.setRotation(tq);
+    br_world.sendTransform(tf::StampedTransform(transform, cameraOdomAftMapped.header.stamp, "world", "camera_init"));
+}
+
 void publish_path(const ros::Publisher pubPath) {
     set_posestamp(msg_body_pose);
     msg_body_pose.header.stamp = ros::Time().fromSec(lidar_end_time);
@@ -1115,6 +1166,7 @@ int main(int argc, char **argv) {
     ros::Publisher pubLaserCloudEffect = nh.advertise<sensor_msgs::PointCloud2>("/cloud_effected", 100000);
     ros::Publisher pubLaserCloudMap = nh.advertise<sensor_msgs::PointCloud2>("/Laser_map", 100000);
     ros::Publisher pubOdomAftMapped = nh.advertise<nav_msgs::Odometry>("/Odometry", 100000);
+    ros::Publisher pubCameraOdomAftMapped = nh.advertise<nav_msgs::Odometry>("/OdometryCamera", 100000);
     ros::Publisher pubExtrinsic = nh.advertise<nav_msgs::Odometry>("/Extrinsic", 100000);
     ros::Publisher pubPath = nh.advertise<nav_msgs::Path>("/path", 100000);
     ros::Publisher voxel_map_pub =
@@ -1287,7 +1339,8 @@ int main(int argc, char **argv) {
             geoQuat.y = state_point.rot.coeffs()[1];
             geoQuat.z = state_point.rot.coeffs()[2];
             geoQuat.w = state_point.rot.coeffs()[3];
-            publish_odometry(pubOdomAftMapped);
+            // publish_odometry(pubOdomAftMapped);
+            // publish_camera_odometry(pubCameraOdomAftMapped);
             //
             if (common::debug_en) {
                 std::printf("BA: %.4f %.4f %.4f   BG: %.4f %.4f %.4f   g: %.4f %.4f %.4f\n",
@@ -1338,6 +1391,7 @@ int main(int argc, char **argv) {
             // 可视化相关的shit
             /******* Publish odometry *******/
             publish_odometry(pubOdomAftMapped);
+            publish_camera_odometry(pubCameraOdomAftMapped);
             //
             //            /*** add the feature points to map kdtree ***/
             //            map_incremental();

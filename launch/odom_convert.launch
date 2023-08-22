@@ -1,0 +1,4 @@
+<launch>
+   <rosparam command="load" file="$(find pv_lio)/config/avia_indoor_new_calib.yaml"/>
+	<node pkg="pv_lio" type="lodom_to_codom" name="odom_convert"  output="screen"/>
+</launch>

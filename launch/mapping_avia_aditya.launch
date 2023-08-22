@@ -3,9 +3,10 @@
 
     <arg name="rviz" default="true"/>
     <arg name="debug" default="false"/>
-   <!-- <rosparam command="load" file="$(find pv_lio)/config/avia_indoor_new_aditya_calib.yaml"/> -->
+   <!-- <rosparam command="load" file="$(find pv_lio)/config/avia_indoor_new_calib3_aditya.yaml"/> -->
+   <rosparam command="load" file="$(find pv_lio)/config/avia_indoor_new_calib3_v2_aditya.yaml"/>
 
-   <rosparam command="load" file="$(find pv_lio)/config/avia_indoor_new_calib.yaml"/>
+   <!-- <rosparam command="load" file="$(find pv_lio)/config/avia_indoor_new_calib.yaml"/> -->
     <!-- <rosparam command="load" file="$(find pv_lio)/config/avia_outdoor.yaml"/> -->
 
     <group if="$(eval arg('debug') == False)">

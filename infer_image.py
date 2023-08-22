@@ -6,6 +6,9 @@ import numpy as np
 from torch import nn
 from pathlib import Path
 from tqdm.auto import tqdm
+import optimum
+from pqdm.threads import pqdm
+
 
 def ade_palette():
     """ADE20K palette that maps each class to RGB values."""
@@ -162,36 +165,77 @@ def ade_palette():
         [92, 0, 255],
     ]
 
+
 device = torch.device("cuda")
 
 palette = np.array(ade_palette())
 
 image_processor = AutoImageProcessor.from_pretrained("openmmlab/upernet-convnext-large")
-model = UperNetForSemanticSegmentation.from_pretrained("openmmlab/upernet-convnext-large")
+model = UperNetForSemanticSegmentation.from_pretrained(
+    "openmmlab/upernet-convnext-large"
+)
 
 model = model.to(device)
 
-img_paths = list(Path("/home/inkers/satyajit/catkin_pv_lio/segmentation_test2/image_pose").glob("*.png"))
+# img_paths = list(Path("/home/inkers/satyajit/catkin_pv_lio/segmentation_test2/image_pose").glob("*.png"))
+# img_paths = list(Path("/home/inkers/satyajit/catkin_pv_lio/segment_testing/image_pose").glob("*.png"))
 
-for path in tqdm(img_paths):
+img_paths = list(
+    Path("/home/inkers/satyajit/catkin_pv_lio/edge_segment_testing/image_pose").glob(
+        "*.png"
+    )
+)
 
-    a = Image.open(str(path))
+
+def infer_image(img_path):
+    a = Image.open(str(img_path))
     a = a.convert("RGB")
 
     inputs = image_processor(images=a, return_tensors="pt")
     inputs = inputs.to(device)
     outputs = model(**inputs)
 
-    b = nn.functional.interpolate(outputs.logits, size=a.size[::-1], mode="bilinear", align_corners=False)
+    b = nn.functional.interpolate(
+        outputs.logits, size=a.size[::-1], mode="bilinear", align_corners=False
+    )
 
     pred = b.argmax(dim=1)[0]
     pred = pred.cpu()
 
     color_seg = np.zeros((pred.shape[0], pred.shape[1], 3), dtype=np.uint8)
 
-    for label, color in enumerate(palette): color_seg[pred == label, :] = color
+    for label, color in enumerate(palette):
+        color_seg[pred == label, :] = color
 
     color_seg = color_seg[..., ::-1]
 
-    cv2.imwrite(str(path), color_seg)
+    cv2.imwrite(str(img_path), color_seg)
 
+
+result = pqdm(img_paths, infer_image, n_jobs=5)
+
+print(result)
+
+# for path in tqdm(img_paths):
+#     a = Image.open(str(path))
+#     a = a.convert("RGB")
+
+#     inputs = image_processor(images=a, return_tensors="pt")
+#     inputs = inputs.to(device)
+#     outputs = model(**inputs)
+
+#     b = nn.functional.interpolate(
+#         outputs.logits, size=a.size[::-1], mode="bilinear", align_corners=False
+#     )
+
+#     pred = b.argmax(dim=1)[0]
+#     pred = pred.cpu()
+
+#     color_seg = np.zeros((pred.shape[0], pred.shape[1], 3), dtype=np.uint8)
+
+#     for label, color in enumerate(palette):
+#         color_seg[pred == label, :] = color
+
+#     color_seg = color_seg[..., ::-1]
+
+#     cv2.imwrite(str(path), color_seg)

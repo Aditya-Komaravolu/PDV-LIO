@@ -108,6 +108,24 @@ target_include_directories(
   PRIVATE ${PYTHON_INCLUDE_DIRS}
 )
 
+add_executable(
+  lodom_to_codom
+  src/odom_convert/main.cpp
+  src/calibration_data.hpp
+)
+
+target_link_libraries(
+  lodom_to_codom
+  ${catkin_LIBRARIES}
+  ${PCL_LIBRARIES}
+  ${PYTHON_LIBRARIES}
+)
+
+target_include_directories(
+  lodom_to_codom
+  PRIVATE ${PYTHON_INCLUDE_DIRS}
+)
+
 # add_executable(pandar_to_velodyne src/converter/pandar_to_velodyne.cpp)
 # target_link_libraries(pandar_to_velodyne ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${PYTHON_LIBRARIES})
 # target_include_directories(pandar_to_velodyne PRIVATE ${PYTHON_INCLUDE_DIRS})

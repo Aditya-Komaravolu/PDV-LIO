@@ -9,6 +9,10 @@ common:
 camera:
     image_topic: "/camera_out"
     extrinsic_RT: 
+            # [0.0113999,-0.999784,-0.017398,-0.0531082,
+            # 0.404903,0.0205243,-0.914129,-0.0392065,
+            # 0.914289,0.00337652,0.405049,-0.0263403,
+            # 0,0,0,1]
             [0.00837535,-0.999735,-0.0214202,-0.0441428,
             0.404159,0.0229777,-0.9144,-0.0305941,
             0.91465,-0.000998744,0.404245,-0.0425551,
@@ -40,16 +44,16 @@ mapping:
     # down_sample_size: 0.1
     # max_iteration: 4
     # voxel_size: 0.25
-    down_sample_size: 0.1
+    down_sample_size: 0.05
     max_iteration: 10
-    voxel_size: 0.4
+    voxel_size: 0.1
     max_layer: 4                # 4 layer, 0, 1, 2, 3
     layer_point_size: [ 5, 5, 5, 5, 5 ]
     plannar_threshold: 0.008
     max_points_size: 2000
     max_cov_points_size: 2000
 
-    enable_coloring: false
+    enable_coloring: true
     fov_degree:    360
     det_range:     100.0
     extrinsic_est_en:  true      # true: enable the online estimation of IMU-LiDAR extrinsic,
@@ -60,9 +64,9 @@ mapping:
 
 
 save:
-    base_path: "/home/inkers/satyajit/catkin_pv_lio/testing"
-    hba_pose_pcd: false
-    image_and_pose: false
+    base_path: "/home/inkers/satyajit/catkin_pv_lio/aditya_testing"
+    hba_pose_pcd: true
+    image_and_pose: true
     openmvs_file: false
     cloud_pcd: true
     cloud_ply: true
@@ -90,3 +94,4 @@ publish:
     scan_publish_en:  true       # false: close all the point cloud output
     dense_publish_en: true       # false: low down the points number in a global-frame point clouds scan.
     scan_bodyframe_pub_en: true  # true: output the point cloud scans in IMU-body-frame
+
