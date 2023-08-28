@@ -47,9 +47,11 @@
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl_conversions/pcl_conversions.h>
+#include <pv_lio/Float32Stamped.h>
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <so3_math.h>
+#include <std_msgs/Float32.h>
 #include <std_srvs/SetBool.h>
 #include <std_srvs/Trigger.h>
 #include <tf/transform_broadcaster.h>
@@ -135,6 +137,7 @@ std::deque<double> time_buffer;
 std::deque<PointCloudXYZINormal::Ptr> lidar_buffer;
 std::deque<sensor_msgs::Imu::ConstPtr> imu_buffer;
 std::deque<sensor_msgs::ImageConstPtr> cam_buffer;
+std::deque<pv_lio::Float32Stamped::ConstPtr> voxel_size_buffer;
 
 PointCloudXYZINormal::Ptr featsFromMap(new PointCloudXYZINormal());
 PointCloudXYZINormal::Ptr feats_undistort(new PointCloudXYZINormal());
@@ -422,6 +425,12 @@ void imu_cbk(const sensor_msgs::Imu::ConstPtr &msg_in) {
     sig_buffer.notify_all();
 }
 
+void set_voxel_size_cbk(const pv_lio::Float32Stamped::ConstPtr &msg) {
+    voxel_size_buffer.push_back(msg);
+
+    LOG_S(INFO) << "got set_voxel_size message " << msg->data << " timestamp: " << msg->header.stamp.toSec() << std::endl;
+}
+
 double lidar_mean_scantime = 0.0;
 int scan_num = 0;
 /// @brief syncs lidar, imu and camera
@@ -430,13 +439,17 @@ int scan_num = 0;
 std::tuple<bool, bool> sync_packages(MeasureGroup &meas) {
     if (enable_coloring) {
         if (lidar_buffer.empty() || imu_buffer.empty() || cam_buffer.empty()) {
-            LOG_S(WARNING) << "QUEUE EMPTY! COLORING ENABLED" << std::endl;
-            LOG_S(INFO) << "lidar_buffer: " << lidar_buffer.size() << " , imu_buffer: " << imu_buffer.size() << " , cam_buffer: " << cam_buffer.size() << std::endl;
+            if (common::debug_en) {
+                LOG_S(WARNING) << "QUEUE EMPTY! COLORING ENABLED" << std::endl;
+                LOG_S(INFO) << "lidar_buffer: " << lidar_buffer.size() << " , imu_buffer: " << imu_buffer.size() << " , cam_buffer: " << cam_buffer.size() << std::endl;
+            }
             return std::make_tuple(false, true);
         }
     } else {
         if (lidar_buffer.empty() || imu_buffer.empty()) {
-            LOG_S(WARNING) << "QUEUE EMPTY! COLORING NOT ENABLED" << std::endl;
+            if (common::debug_en) {
+                LOG_S(WARNING) << "QUEUE EMPTY! COLORING NOT ENABLED" << std::endl;
+            }
             return std::make_tuple(false, true);
         }
     }
@@ -474,6 +487,19 @@ std::tuple<bool, bool> sync_packages(MeasureGroup &meas) {
         //        std::printf("Scan start timestamp: %f, Scan end time: %f\n", meas.lidar_beg_time, meas.lidar_end_time);
 
         lidar_pushed = true;
+    }
+
+    // set voxel size if current timestamp > voxel message timestamp
+    if (!voxel_size_buffer.empty()) {
+        auto front = voxel_size_buffer.front();
+
+        // LOG_S(INFO) << "front voxel timestamp " << front->header.stamp.toSec() << ", lidar last timestamp: " << last_timestamp_lidar << std::endl;
+
+        if (lidar_end_time > front->header.stamp.toSec()) {
+            LOG_S(WARNING) << "setting max_voxel_size to: " << front->data << " set voxel timestamp: " << front->header.stamp.toSec() << " lidar last timestamp: " << last_timestamp_lidar << std::endl;
+            max_voxel_size = front->data;
+            voxel_size_buffer.pop_front();
+        }
     }
 
     if (last_timestamp_imu < lidar_end_time) {
@@ -1160,6 +1186,8 @@ int main(int argc, char **argv) {
     if (enable_coloring) {
         cam_sub = it.subscribe(cam_topic, 10000, &rgb_cam_cbk);
     }
+
+    ros::Subscriber sub_voxel_size = nh.subscribe("/set_voxel_size", 10000, set_voxel_size_cbk);
 
     ros::Publisher pubLaserCloudFull = nh.advertise<sensor_msgs::PointCloud2>("/cloud_registered", 100000);
     ros::Publisher pubLaserCloudFull_body = nh.advertise<sensor_msgs::PointCloud2>("/cloud_registered_body", 100000);

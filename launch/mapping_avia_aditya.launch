@@ -4,7 +4,7 @@
     <arg name="rviz" default="true"/>
     <arg name="debug" default="false"/>
    <!-- <rosparam command="load" file="$(find pv_lio)/config/avia_indoor_new_calib3_aditya.yaml"/> -->
-   <rosparam command="load" file="$(find pv_lio)/config/avia_indoor_new_calib3_v2_aditya.yaml"/>
+   <rosparam command="load" file="$(find pv_lio)/config/avia_outdoor_new_drone_calib1_aditya.yaml"/>
 
    <!-- <rosparam command="load" file="$(find pv_lio)/config/avia_indoor_new_calib.yaml"/> -->
     <!-- <rosparam command="load" file="$(find pv_lio)/config/avia_outdoor.yaml"/> -->

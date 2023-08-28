@@ -1,0 +1,94 @@
+common:
+    lid_topic:  "/livox/lidar"
+    imu_topic:  "/livox/imu"
+    #    imu_topic:  "/livox/imu"
+    time_sync_en: false         # ONLY turn on when external time synchronization is really not possible
+    time_diff_lidar_to_imu: 0.0
+    debug: false
+
+camera:
+    image_topic: "/usb_cam/image_raw"
+    extrinsic_RT: 
+            [-0.0344642,   -0.999357, -0.00986393,    0.335234,
+            -0.0459436,   0.0114436,   -0.998878,    -0.51234,
+            0.998349,  -0.0339724,  -0.0463085,     1.21843,
+            0,           0,           0,           1,]
+    intrinsic:
+            [554.023876 ,0.000000, 340.953927,
+            0.000000 , 546.560959 ,282.195250,
+            0.000000, 0.000000, 1.000000]
+
+    distCoeff:
+            [-0.416062,0.168341,-0.018271,0.002577,0.000000]
+
+preprocess:
+    lidar_type: 1                # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR,
+    scan_line: 6
+    scan_rate: 10
+    blind: 0.1
+    point_filter_num: 1
+
+mapping:
+    # down_sample_size: 0.05
+    # max_iteration: 10
+    # voxel_size: 0.1
+    # down_sample_size: 0.2
+    # max_iteration: 10
+    # voxel_size: 0.1
+    # down_sample_size: 0.3
+    # max_iteration: 6
+    # voxel_size: 0.4
+    # down_sample_size: 0.1
+    # max_iteration: 4
+    # voxel_size: 0.25
+    down_sample_size: 0.05
+    max_iteration: 10
+    voxel_size: 2.0 
+    max_layer: 4                # 4 layer, 0, 1, 2, 3
+    layer_point_size: [ 5, 5, 5, 5, 5 ]
+    plannar_threshold: 0.008
+    max_points_size: 2000
+    max_cov_points_size: 2000
+
+    enable_coloring: true
+    fov_degree:    360
+    det_range:     100.0
+    extrinsic_est_en:  true      # true: enable the online estimation of IMU-LiDAR extrinsic,
+    extrinsic_T: [ 0.04165, 0.02326, -0.0284 ]
+    extrinsic_R: [ 1, 0, 0,
+                   0, 1, 0,
+                   0, 0, 1]
+
+
+save:
+    base_path: "/home/inkers/satyajit/catkin_pv_lio/aditya_testing"
+    hba_pose_pcd: false
+    image_and_pose: false
+    openmvs_file: false
+    cloud_pcd: true
+    cloud_ply: true
+    cloud_lio_pcd: true
+
+noise_model:
+    ranging_cov: 0.02
+    angle_cov: 0.05
+    acc_cov: 0.5
+    gyr_cov: 0.25
+    b_acc_cov: 0.0043
+    b_gyr_cov: 0.000266
+    # ranging_cov: 0.01
+    # angle_cov: 0.01
+    # acc_cov: 0.2
+    # gyr_cov: 0.1
+    # b_acc_cov: 0.0001
+    # b_gyr_cov: 0.0001
+
+publish:
+    pub_color_map: true
+    pub_voxel_map: false
+    publish_max_voxel_layer: 2         # only publish 0,1,2 layer's plane
+    path_en:  true
+    scan_publish_en:  true       # false: close all the point cloud output
+    dense_publish_en: true       # false: low down the points number in a global-frame point clouds scan.
+    scan_bodyframe_pub_en: true  # true: output the point cloud scans in IMU-body-frame
+

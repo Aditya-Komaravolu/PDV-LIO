@@ -177,7 +177,7 @@ void save_dump(std::string dump_dir) {
     point_cloud_dump.num_points = point_cloud_dump.m_points.size();
     point_cloud_dump.num_views = point_cloud_dump.m_pose_vec.size();
     // std::string file_name = "/home/inkers/adit/catkin_pv_lio/test.pv_lio";
-    std::string file_name = dump_dir + "test.pv_lio";
+    std::string file_name = dump_dir + "/test.pv_lio";
 
     point_cloud_dump.dump_to_file(file_name);
     LOG_S(INFO) << "saved openmvs dump to " << file_name << "\n";

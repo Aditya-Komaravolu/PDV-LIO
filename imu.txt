@@ -1,0 +1,23 @@
+header: 
+  seq: 657
+  stamp: 
+    secs: 1692422862
+    nsecs: 652684689
+  frame_id: "livox_frame"
+orientation: 
+  x: 0.0
+  y: 0.0
+  z: 0.0
+  w: 0.0
+orientation_covariance: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+angular_velocity: 
+  x: -0.025351136922836304
+  y: -0.0009435876272618771
+  z: -0.0034232549369335175
+angular_velocity_covariance: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+linear_acceleration: 
+  x: -0.41642457246780396
+  y: -0.0777319148182869
+  z: 0.8725072145462036
+linear_acceleration_covariance: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+---

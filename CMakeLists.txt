@@ -71,6 +71,10 @@ add_service_files(
   FILES
   SetFloat.srv
 )
+add_message_files(
+  FILES
+  Float32Stamped.msg
+)
 
 generate_messages(
  DEPENDENCIES
