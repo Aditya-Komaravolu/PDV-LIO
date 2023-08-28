@@ -245,3 +245,9 @@ Set Voxel Size
 ```
 rosservice call /set_voxel_size "data: 10.0"
 ```
+
+Set Voxel size using Topic Messages
+
+```
+rostopic pub /set_voxel_size pv_lio/Float32Stamped '{data: 0.7, header: {stamp: {secs: 1692422873, nsecs: 0 }}}'
+```
