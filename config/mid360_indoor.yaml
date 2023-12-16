@@ -28,35 +28,23 @@ preprocess:
     point_filter_num: 1
 
 mapping:
-    # down_sample_size: 0.05
-    # max_iteration: 10
-    # voxel_size: 0.1
-    # down_sample_size: 0.2
-    # max_iteration: 10
-    # voxel_size: 0.1
-    # down_sample_size: 0.3
-    # max_iteration: 6
-    # voxel_size: 0.4
-    # down_sample_size: 0.1
-    # max_iteration: 4
-    # voxel_size: 0.25
-    down_sample_size: 0.1
+    down_sample_size: 0.05
     max_iteration: 10
-    voxel_size: 0.4
+    voxel_size: 0.1
     max_layer: 4                # 4 layer, 0, 1, 2, 3
     layer_point_size: [ 5, 5, 5, 5, 5 ]
-    plannar_threshold: 0.008
+    plannar_threshold: 0.01
     max_points_size: 2000
     max_cov_points_size: 2000
 
     enable_coloring: false
     fov_degree:    360
     det_range:     100.0
-    extrinsic_est_en:  false      # true: enable the online estimation of IMU-LiDAR extrinsic,
-    extrinsic_T: [ -0.011, -0.02329, 0.04412 ]
-    extrinsic_R: [ 1, 0, 0,
-                   0, 1, 0,
-                   0, 0, 1]
+    extrinsic_est_en:  true      # true: enable the online estimation of IMU-LiDAR extrinsic,
+    extrinsic_T: [ 0.04165, 0.02326, -0.0284 ]    
+    extrinsic_R: [ 1, 0, 0,                   
+                0, 1, 0,                   
+                0, 0, 1]
 
 
 save:
@@ -75,12 +63,6 @@ noise_model:
     gyr_cov: 0.25
     b_acc_cov: 0.0043
     b_gyr_cov: 0.000266
-    # ranging_cov: 0.01
-    # angle_cov: 0.01
-    # acc_cov: 0.2
-    # gyr_cov: 0.1
-    # b_acc_cov: 0.0001
-    # b_gyr_cov: 0.0001
 
 publish:
     pub_color_map: true

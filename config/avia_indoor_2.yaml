@@ -1,0 +1,101 @@
+common:
+  lid_topic: /livox/lidar
+  imu_topic: /livox/imu
+  time_sync_en: false
+  time_diff_lidar_to_imu: 0.0
+  debug: false
+camera:
+  image_topic: /camera_out
+  extrinsic_RT:
+  - 0.00404423
+  - -0.999845
+  - -0.0171107
+  - -0.1205899
+  - -0.0188911
+  - 0.0170314
+  - -0.999676
+  - 0.02542848
+  - 0.999813
+  - 0.00436616
+  - -0.0188193
+  - -0.11751091
+  - 0.0
+  - 0.0
+  - 0.0
+  - 1.0
+  intrinsic:
+  - 845.142955
+  - 0.0
+  - 615.159851
+  - 0.0
+  - 845.755731
+  - 511.310303
+  - 0.0
+  - 0.0
+  - 1.0
+  distCoeff:
+  - -0.246718
+  - 0.088567
+  - -0.000586
+  - 0.000101
+  - 0.0
+preprocess:
+  lidar_type: 1
+  scan_line: 6
+  scan_rate: 10
+  blind: 0.1
+  point_filter_num: 1
+mapping:
+  down_sample_size: 0.2
+  max_iteration: 4
+  voxel_size: 0.3
+  max_layer: 4
+  layer_point_size:
+  - 5
+  - 5
+  - 5
+  - 5
+  - 5
+  plannar_threshold: 0.01
+  max_points_size: 1000
+  max_cov_points_size: 1000
+  enable_coloring: true
+  fov_degree: 360
+  det_range: 100.0
+  extrinsic_est_en: true
+  extrinsic_T:
+  - 0.04165
+  - 0.02326
+  - -0.0284
+  extrinsic_R:
+  - 1
+  - 0
+  - 0
+  - 0
+  - 1
+  - 0
+  - 0
+  - 0
+  - 1
+save:
+  hba_pose_pcd: true
+  image_and_pose: true
+  openmvs_file: true
+  cloud_pcd: true
+  cloud_ply: true
+  cloud_lio_pcd: true
+noise_model:
+  ranging_cov: 0.02
+  angle_cov: 0.05
+  acc_cov: 0.5
+  gyr_cov: 0.25
+  b_acc_cov: 0.0043
+  b_gyr_cov: 0.000266
+publish:
+  pub_color_map: false
+  pub_voxel_map: false
+  publish_max_voxel_layer: 2
+  path_en: true
+  scan_publish_en: true
+  dense_publish_en: true
+  scan_bodyframe_pub_en: true

@@ -33,6 +33,8 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 #define PCL_NO_PRECOMPILE  // !! BEFORE ANY PCL INCLUDE!!
+#include <sstream>
+#include <iostream>
 
 #include <Python.h>
 #include <geometry_msgs/Vector3.h>
@@ -54,6 +56,7 @@
 #include <std_msgs/Float32.h>
 #include <std_srvs/SetBool.h>
 #include <std_srvs/Trigger.h>
+#include <std_msgs/String.h>
 #include <tf/transform_broadcaster.h>
 #include <tf/transform_datatypes.h>
 #include <unistd.h>
@@ -104,8 +107,10 @@ bool save_hba_pose_en = false;
 std::string save_base_path;
 double time_diff_lidar_to_imu = 0.0;
 
-string map_file_path, lid_topic, imu_topic, cam_topic, pcd_save_path;
-double last_timestamp_lidar = 0, last_cam_timestamp = 0, last_timestamp_imu = -1.0;
+bool enable_small_rooms;
+ 
+string map_file_path, lid_topic, imu_topic, cam_topic, small_room_topic, pcd_save_path;
+double last_timestamp_lidar = 0, last_cam_timestamp = 0, last_timestamp_imu = -1.0, last_small_room_timestamp = 0;
 double last_imu_processed_time = -1.0;
 
 float res_last[100000] = {0.0};
@@ -121,6 +126,7 @@ string root_dir = ROOT_DIR;
 double res_mean_last = 0.05, total_residual = 0.0;
 double gyr_cov = 0.1, acc_cov = 0.1, b_gyr_cov = 0.0001, b_acc_cov = 0.0001;
 double filter_size_surf_min = 0;
+double filter_size_surf_min_default = 0;
 double total_distance = 0, lidar_end_time = 0, first_lidar_time = 0.0;
 int effct_feat_num = 0, time_log_counter = 0, scan_count = 0, publish_count = 0;
 int iterCount = 0, feats_down_size = 0, NUM_MAX_ITERATIONS = 0, laserCloudValidNum = 0, pcd_index = 0, pcd_save_interval = -1;
@@ -138,6 +144,9 @@ std::deque<PointCloudXYZINormal::Ptr> lidar_buffer;
 std::deque<sensor_msgs::Imu::ConstPtr> imu_buffer;
 std::deque<sensor_msgs::ImageConstPtr> cam_buffer;
 std::deque<pv_lio::Float32Stamped::ConstPtr> voxel_size_buffer;
+std::deque<double> small_room_timestamps;
+std::deque<std_msgs::String::ConstPtr> small_room_msgs;
+
 
 PointCloudXYZINormal::Ptr featsFromMap(new PointCloudXYZINormal());
 PointCloudXYZINormal::Ptr feats_undistort(new PointCloudXYZINormal());
@@ -170,6 +179,8 @@ int max_cov_points_size = 50;
 int max_points_size = 50;
 double sigma_num = 2.0;
 double max_voxel_size = 1.0;
+double default_voxel_size = 1.0;
+
 std::vector<int> layer_size;
 
 double ranging_cov = 0.0;
@@ -431,6 +442,133 @@ void set_voxel_size_cbk(const pv_lio::Float32Stamped::ConstPtr &msg) {
     LOG_S(INFO) << "got set_voxel_size message " << msg->data << " timestamp: " << msg->header.stamp.toSec() << std::endl;
 }
 
+
+
+void publish_small_room_info(const std_msgs::String::ConstPtr& msg){
+
+    // ROS_INFO("current env location:");
+    // std::cout <<  msg->data.c_str() << std::endl;
+    mtx_buffer.lock();
+    LOG_S(INFO) << "current env location: " << msg->data <<  std::endl;
+    std::string data = msg->data;
+    double timestamp_tolerance = 0.2;
+
+
+    // std::cout << "1:" <<  data.substr(data.find(":"), data.find(",")) << endl;
+    // std::cout << "2:" <<  data.substr(data.find(":", data.find(":"))+1, data.find(",")) << endl; 
+    // std::cout << "3:" <<  data.substr(data.find("secs:")+5, data.find(",",data.find("secs:")+5) - (data.find("secs:")+5)) << endl; 
+    // std::cout << "4:" <<  data.substr(data.find_first_of("secs:")+5, data.find(",")-1) << endl; 
+    // std::cout << "5:" <<  data.substr(data.find_first_of("secs:")+5, data.find_last_of(",")-1) << endl; 
+
+
+    
+    std::string secsSubstring = data.substr(data.find("secs:")+5, data.find(",",data.find("secs:")+5) - (data.find("secs:")+5));
+    // std::cout << "Msg secs: " << secsSubstring << std::endl;
+    std::string nsecsSubstring = data.substr(data.find_last_of(":")+1, data.length()-1);
+    // std::cout << "Msg nsecs: " <<  nsecsSubstring << std::endl;
+    long secs, nsecs;
+    std::istringstream(secsSubstring) >> secs;
+    std::istringstream(nsecsSubstring) >> nsecs;
+    double current_timestamp = static_cast<double>(secs) + static_cast<double>(nsecs) * 1e-9;
+    ros::Time ros_timestamp;
+    ros_timestamp.fromSec(current_timestamp);
+     
+    // std::cout << "Current lidar endtime: " << Measures.lidar_beg_time << endl;
+    // std::cout << "Difference in  lidar timestamp and small room timestamp: " << last_timestamp_lidar  - current_timestamp << endl;
+
+    pv_lio::Float32Stamped timestamp;
+
+
+    timestamp.header.stamp = ros_timestamp;
+  
+    // timestamp.data = 0.1;
+
+    // last_small_room_timestamp = current_timestamp;
+
+    // while (last_timestamp_lidar -  current_timestamp){
+    
+    
+    // std::cout << "Difference in  lidar timestamp and small room timestamp: " << last_timestamp_lidar  - current_timestamp << endl;
+
+    // if (!time_sync_en && abs(last_small_room_timestamp - last_timestamp_lidar) < timestamp_tolerance && !lidar_buffer.empty()) {
+
+        // if (std::abs(last_timestamp_lidar - current_timestamp) < timestamp_tolerance){
+            // std::cout << "EQUAL!!" << endl;        
+
+    if (data.find("Small Room") != std::string::npos) {
+        LOG_S(INFO) << "Entered small room. Setting VOXEL SIZE: 0.1 , DOWN SAMPLE: 0.05 " << std::endl;
+        timestamp.data = 0.1;
+        // max_voxel_size = 0.1;
+        // filter_size_surf_min = 0.05;
+        pv_lio::Float32Stamped::ConstPtr ptr_timestamp = boost::make_shared<pv_lio::Float32Stamped>(timestamp);
+        voxel_size_buffer.push_back(ptr_timestamp);
+
+
+    } 
+    else if (data.find("Large Room") != std::string::npos) {
+        LOG_S(INFO) << "Entered Large Room. Setting VOXEL SIZE: " << default_voxel_size << ", DOWN SAMPLE: " << filter_size_surf_min_default << std::endl;
+        timestamp.data = default_voxel_size;
+        // max_voxel_size = default_voxel_size;
+        // filter_size_surf_min = filter_size_surf_min_default;
+        pv_lio::Float32Stamped::ConstPtr ptr_timestamp = boost::make_shared<pv_lio::Float32Stamped>(timestamp);
+        voxel_size_buffer.push_back(ptr_timestamp);
+
+    }
+
+            // break;
+        // }
+    // }
+    // else{
+    //     ROS_WARN("Lidar Last time is greater than Small room first timestamp");
+    //     small_room_timestamps.clear();
+    // }
+    // small_room_timestamps.push_back(current_timestamp);
+    // small_room_msgs.push_back(msg);
+    mtx_buffer.unlock();
+    sig_buffer.notify_all();
+
+}
+
+void set_dynamic_voxelization_params_cbk(const livox_ros_driver::CustomMsg::ConstPtr &msg){
+
+    
+    if (!small_room_timestamps.empty() || !time_buffer.empty()){
+
+        double last_recorded_timestamp = small_room_timestamps.front();
+        std::string msg_data = small_room_msgs.front()->data;
+        double lidar_timestamp = msg->header.stamp.toSec();
+        std::cout << "Small room timestamp: " << last_recorded_timestamp << " Lidar Timestamp: " << last_timestamp_lidar << std::endl;
+        std::cout << "Difference in lidar timestamp and small room timestamp: " << last_timestamp_lidar - last_recorded_timestamp << endl;
+
+        
+
+        // while (!){
+
+        // while(last_recorded_timestamp > last_timestamp_lidar);
+
+        if (last_recorded_timestamp == last_timestamp_lidar){        
+            if (msg_data.find("Small Room") != std::string::npos) {
+                LOG_S(INFO) << "Entered small room. Setting VOXEL SIZE: 0.1 , DOWN SAMPLE: 0.05 " << std::endl;
+                max_voxel_size = 0.1;
+                filter_size_surf_min = 0.05;
+
+            } 
+            else if (msg_data.find("Large Room") != std::string::npos) {
+                LOG_S(INFO) << "Entered Large Room. Setting VOXEL SIZE: " << default_voxel_size << ", DOWN SAMPLE: " << filter_size_surf_min_default << std::endl;
+                max_voxel_size = default_voxel_size;
+                filter_size_surf_min = filter_size_surf_min_default;
+            }
+            //     break;
+            // }
+
+            small_room_timestamps.pop_front();
+            small_room_msgs.pop_front();
+
+        }
+    }
+
+}
+
 double lidar_mean_scantime = 0.0;
 int scan_num = 0;
 /// @brief syncs lidar, imu and camera
@@ -496,14 +634,14 @@ std::tuple<bool, bool> sync_packages(MeasureGroup &meas) {
         // LOG_S(INFO) << "front voxel timestamp " << front->header.stamp.toSec() << ", lidar last timestamp: " << last_timestamp_lidar << std::endl;
 
         if (lidar_end_time > front->header.stamp.toSec()) {
-            LOG_S(WARNING) << "setting max_voxel_size to: " << front->data << " set voxel timestamp: " << front->header.stamp.toSec() << " lidar last timestamp: " << last_timestamp_lidar << std::endl;
+            LOG_S(WARNING) << std::setprecision(20) << "setting max_voxel_size to: " << front->data << " set voxel timestamp: " << front->header.stamp.toSec() << " lidar last timestamp: " << last_timestamp_lidar << std::endl;
             max_voxel_size = front->data;
             voxel_size_buffer.pop_front();
         }
     }
 
     if (last_timestamp_imu < lidar_end_time) {
-        LOG_S(WARNING) << "lidar time > imu time" << std::endl;
+        // LOG_S(WARNING) << "lidar time > imu time" << std::endl;
         if (common::debug_en) {
             LOG_S(INFO) << "lidar_buffer: " << lidar_buffer.size() << " , imu_buffer: " << imu_buffer.size() << " , cam_buffer: " << cam_buffer.size() << std::endl;
         }
@@ -558,6 +696,7 @@ std::tuple<bool, bool> sync_packages(MeasureGroup &meas) {
     lidar_buffer.pop_front();
     time_buffer.pop_front();
     lidar_pushed = false;
+
 
     if (common::debug_en) {
         LOG_S(INFO) << "lidar_buffer: " << lidar_buffer.size() << " , imu_buffer: " << imu_buffer.size() << " , cam_buffer: " << cam_buffer.size() << std::endl;
@@ -1020,6 +1159,8 @@ void observation_model_share(state_ikfom &s, esekfom::dyn_share_datastruct<doubl
     // std::printf("ef_num: %d\n", effct_feat_num);
 }
 
+
+
 bool set_kill_on_finish(std_srvs::SetBool::Request &req, std_srvs::SetBool::Response &res) {
     if (req.data) {
         kill_on_finish = true;
@@ -1087,8 +1228,10 @@ int main(int argc, char **argv) {
     nh.param<bool>("publish/scan_bodyframe_pub_en", scan_body_pub_en, true);
     nh.param<string>("common/lid_topic", lid_topic, "/livox/lidar");
     nh.param<string>("common/imu_topic", imu_topic, "/livox/imu");
+    nh.param<string>("common/small_room_topic", small_room_topic, "/small_room");
     nh.param<bool>("common/time_sync_en", time_sync_en, false);
     nh.param<double>("common/time_diff_lidar_to_imu", time_diff_lidar_to_imu, 0.0);
+    
 
     // camera params
     nh.param<std::string>("camera/image_topic", cam_topic, "/uncompressed_1");
@@ -1099,7 +1242,7 @@ int main(int argc, char **argv) {
     calibration_data::camera.init(nh);
 
     // Save Params
-    nh.param<std::string>("save/base_path", save_base_path, root_dir);
+    nh.param<std::string>("base_path", save_base_path, root_dir);
     nh.param<bool>("save/hba_pose_pcd", save_hba_pose_en, false);
     nh.param<bool>("save/image_and_pose", save_image_and_pose_en, false);
     nh.param<bool>("save/openmvs_file", save_openmvs_file_en, false);
@@ -1123,7 +1266,8 @@ int main(int argc, char **argv) {
     nh.param<bool>("mapping/extrinsic_est_en", extrinsic_est_en, true);
     nh.param<vector<double>>("mapping/extrinsic_T", extrinT, vector<double>());
     nh.param<vector<double>>("mapping/extrinsic_R", extrinR, vector<double>());
-    nh.param<bool>("mapping/enable_coloring", enable_coloring, true);
+    nh.param<bool>("mapping/enable_coloring", enable_coloring, false);
+    nh.param<bool>("mapping/enable_small_rooms", enable_small_rooms , true);
 
     // noise model params
     nh.param<double>("noise_model/ranging_cov", ranging_cov, 0.02);
@@ -1148,6 +1292,9 @@ int main(int argc, char **argv) {
     for (int i = 0; i < layer_point_size.size(); i++) {
         layer_size.push_back(layer_point_size[i]);
     }
+
+    default_voxel_size = max_voxel_size;
+    filter_size_surf_min_default = filter_size_surf_min;
 
     path.header.stamp = ros::Time::now();
     path.header.frame_id = "camera_init";
@@ -1187,7 +1334,21 @@ int main(int argc, char **argv) {
         cam_sub = it.subscribe(cam_topic, 10000, &rgb_cam_cbk);
     }
 
+
+    // if (enable_coloring){
+    //      ros::Subscriber cam_sub = nh.subscribe(cam_topic, 10000, &rgb_cam_cbk);
+    // }
+
     ros::Subscriber sub_voxel_size = nh.subscribe("/set_voxel_size", 10000, set_voxel_size_cbk);
+
+    // if (enable_small_rooms){
+    ros::Subscriber en_small_rooms = nh.subscribe(small_room_topic, 1000, publish_small_room_info);
+
+    // if (!small_room_timestamps.empty()){
+    // ros::Subscriber change_vs = nh.subscribe(lid_topic, 200000, set_dynamic_voxelization_params_cbk);
+    // }
+    // }
+
 
     ros::Publisher pubLaserCloudFull = nh.advertise<sensor_msgs::PointCloud2>("/cloud_registered", 100000);
     ros::Publisher pubLaserCloudFull_body = nh.advertise<sensor_msgs::PointCloud2>("/cloud_registered_body", 100000);
@@ -1284,6 +1445,10 @@ int main(int argc, char **argv) {
                 ROS_WARN("No point, skip this scan!\n");
                 continue;
             }
+
+            // if (enable_small_rooms){
+            //     set_dynamic_voxelization_params_cbk();
+            // }
 
             flg_EKF_inited = (Measures.lidar_beg_time - first_lidar_time) < INIT_TIME ? false : true;
             // ===============================================================================================================

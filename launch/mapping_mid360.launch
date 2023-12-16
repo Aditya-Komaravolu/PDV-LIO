@@ -2,7 +2,7 @@
     <arg name="rviz" default="true"/>
     <arg name="debug" default="false"/>
    <!-- <rosparam command="load" file="$(find pv_lio)/config/mid360_indoor.yaml"/> -->
-   <rosparam command="load" file="$(find pv_lio)/config/mid360_outdoor.yaml"/>
+   <rosparam command="load" file="$(find pv_lio)/config/mid360_indoor.yaml"/>
 
     <group if="$(eval arg('debug') == False)">
         <node pkg="pv_lio" type="pv_lio_node" name="pv_lio_node" output="screen" />

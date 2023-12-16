@@ -3,20 +3,17 @@
 
     <arg name="rviz" default="true"/>
     <arg name="debug" default="false"/>
-   <!-- <rosparam command="load" file="$(find pv_lio)/config/avia_indoor_new_aditya_calib.yaml"/> -->
+    <arg name="base_path"/>
 
-   <rosparam command="load" file="$(find pv_lio)/config/avia_indoor_2.yaml"/>
-    <!-- <rosparam command="load" file="$(find pv_lio)/config/avia_outdoor.yaml"/> -->
 
-    <group if="$(eval arg('debug') == False)">
-        <node pkg="pv_lio" type="pv_lio_node" name="pv_lio_node" output="screen"
-         />
-    </group>
+    <rosparam command="load" file="$(find pv_lio)/config/pvlio.yaml"/>
+    <param name="base_path" type="string" value="$(find pv_lio)/PCD/" />
 
-             <!-- launch-prefix="gdb -ex run \-\-args" -->
 
+    <node pkg="pv_lio" type="pv_lio_node" name="pv_lio_node" output="screen" required="true" />
     
     <node pkg="image_transport" type="republish" name="decompress" output="screen" args="compressed in:=/pylon_camera_node/image_raw raw out:=/camera_out" />
+
 
     <group if="$(arg rviz)">
         <node launch-prefix="nice" pkg="rviz" type="rviz" name="rviz"

@@ -9,16 +9,20 @@ common:
 camera:
     image_topic: "/camera_out"
     extrinsic_RT: 
-            [0.00837535,-0.999735,-0.0214202,-0.0441428,
-            0.404159,0.0229777,-0.9144,-0.0305941,
-            0.91465,-0.000998744,0.404245,-0.0425551,
-            0,0,0,1]
+            # [0.0113999,-0.999784,-0.017398,-0.0531082,
+            # 0.404903,0.0205243,-0.914129,-0.0392065,
+            # 0.914289,0.00337652,0.405049,-0.0263403,
+            # 0,0,0,1]
+            [0.0205142,  -0.999357, -0.0293951, -0.0491254,
+            0.412231,  0.0352404,  -0.910398, -0.0444353,
+            0.910848, 0.00655849,   0.412689, -0.0458594,
+            0,          0,          0,          1]
     intrinsic:
-            [845.404257,    0.     ,  642.550484 ,
-            0.     , 845.756218,  537.612199,
-            0.     ,    0.     ,    1.  ]
+            [1175.725275, 0.000000, 723.122858,
+            0.000000 ,1175.103088 ,571.948817,
+            0.000000 ,0.000000, 1.000000]
     distCoeff:
-            [-0.233781, 0.077340, -0.000582, -0.000710, 0.000000]
+            [-0.250473 ,0.103734 ,-0.000930, -0.000485, 0.00000000]
 
 preprocess:
     lidar_type: 1                # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR,
@@ -40,9 +44,9 @@ mapping:
     # down_sample_size: 0.1
     # max_iteration: 4
     # voxel_size: 0.25
-    down_sample_size: 0.1
+    down_sample_size: 0.05
     max_iteration: 10
-    voxel_size: 0.4
+    voxel_size: 0.1
     max_layer: 4                # 4 layer, 0, 1, 2, 3
     layer_point_size: [ 5, 5, 5, 5, 5 ]
     plannar_threshold: 0.008
@@ -60,7 +64,7 @@ mapping:
 
 
 save:
-    base_path: "/home/inkers/satyajit/catkin_pv_lio/testing"
+    base_path: "/home/inkers/satyajit/catkin_pv_lio/aditya_testing"
     hba_pose_pcd: false
     image_and_pose: false
     openmvs_file: false
@@ -90,3 +94,4 @@ publish:
     scan_publish_en:  true       # false: close all the point cloud output
     dense_publish_en: true       # false: low down the points number in a global-frame point clouds scan.
     scan_bodyframe_pub_en: true  # true: output the point cloud scans in IMU-body-frame
+

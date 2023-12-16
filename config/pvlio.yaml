@@ -5,6 +5,7 @@ common:
     time_sync_en: false         # ONLY turn on when external time synchronization is really not possible
     time_diff_lidar_to_imu: 0.0
     debug: false
+    small_room_topic: "/small_room"
 
 camera:
     image_topic: "/camera_out"
@@ -28,44 +29,35 @@ preprocess:
     point_filter_num: 1
 
 mapping:
-    # down_sample_size: 0.05
-    # max_iteration: 10
-    # voxel_size: 0.1
-    # down_sample_size: 0.2
-    # max_iteration: 10
-    # voxel_size: 0.1
-    # down_sample_size: 0.3
-    # max_iteration: 6
-    # voxel_size: 0.4
+    down_sample_size: 0.1
+    max_iteration: 10
+    voxel_size: 0.3
     # down_sample_size: 0.1
     # max_iteration: 4
     # voxel_size: 0.25
-    down_sample_size: 0.1
-    max_iteration: 10
-    voxel_size: 0.4
     max_layer: 4                # 4 layer, 0, 1, 2, 3
     layer_point_size: [ 5, 5, 5, 5, 5 ]
-    plannar_threshold: 0.008
-    max_points_size: 2000
-    max_cov_points_size: 2000
+    plannar_threshold: 0.01
+    max_points_size: 1000
+    max_cov_points_size: 1000
+    enable_small_rooms: true
 
     enable_coloring: true
     fov_degree:    360
     det_range:     100.0
-    extrinsic_est_en:  true      # true: enable the online estimation of IMU-LiDAR extrinsic,
+    extrinsic_est_en:  false      # true: enable the online estimation of IMU-LiDAR extrinsic,
     extrinsic_T: [ 0.04165, 0.02326, -0.0284 ]
     extrinsic_R: [ 1, 0, 0,
                    0, 1, 0,
                    0, 0, 1]
 
-
 save:
-    base_path: "/home/inkers/satyajit/catkin_pv_lio/testing"
+    base_path: "/home/inkers/kora_aditya/catkin_slam_ws/"
     hba_pose_pcd: false
     image_and_pose: false
     openmvs_file: false
     cloud_pcd: true
-    cloud_ply: true
+    cloud_ply: false
     cloud_lio_pcd: true
 
 noise_model:

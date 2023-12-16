@@ -1,6 +1,21 @@
 <launch>
+    <arg name="config_file_path"/>
+    <arg name="hba_path"/>
+    <arg name="image_pose_path"/>
+    <arg name="full_pcd_path"/>
+    <arg name="colored_pcd_path"/>
+
+
 
     <!-- <rosparam command="load" file="$(find pv_lio)/config/avia_indoor_new_calib.yaml"/> -->
-    <rosparam command="load" file="$(find pv_lio)/config/mid_1_rgb.yaml"/>
-	<node pkg="pv_lio" type="segment_pc" name="segment_pc"  output="screen"/>
+    <rosparam command="load" file="$(arg  config_file_path)"/>
+    <param name="hba_path" type="string" value="$(arg  hba_path)" />
+    <param name="image_pose_path" type="string" value="$(arg  image_pose_path)" />
+    <param name="full_pcd_path" type="string" value="$(arg  full_pcd_path)" />
+    <param name="colored_pcd_path" type="string" value="$(arg  colored_pcd_path)" />
+
+
+	<node pkg="pv_lio" type="segment_pc" name="segment_pc"  output="screen" required="True"/>
 </launch>
+
+

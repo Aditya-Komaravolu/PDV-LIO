@@ -15,6 +15,10 @@
 #include "../loguru.hpp"
 #include "../r3live_coloring.hpp"
 
+string hba_path;
+string image_pose_path, colored_pcd_path, full_pcd_path;
+
+
 struct pose_t {
     pose_t(Eigen::Quaterniond _q = Eigen::Quaterniond(1, 0, 0, 0), Eigen::Vector3d _t = Eigen::Vector3d(0, 0, 0)) : q(_q), t(_t) {}
 
@@ -47,9 +51,9 @@ void color_pointcloud(cv::Mat& img, pcl::PointCloud<pcl::PointXYZINormal>& point
         // dont color too far
 
         // if (point_in_cam.z() > 3.0) { // for small rooms
-        if (point_in_cam.z() > 10.0) {
-            continue;
-        }
+        //if (point_in_cam.z() > 10.0) {
+          //  continue;
+        //}
 
         double u = (point_in_cam.x() * calibration_data::camera.fx / point_in_cam.z() + calibration_data::camera.cx) * scale;
         double v = (point_in_cam.y() * calibration_data::camera.fy / point_in_cam.z() + calibration_data::camera.cy) * scale;
@@ -82,6 +86,18 @@ int main(int argc, char* argv[]) {
 
     ros::NodeHandle nh;
 
+    nh.param<string>("hba_path", hba_path,"/opt/src");
+    nh.param<string>("image_pose_path", image_pose_path, "/opt/src");
+    nh.param<string>("full_pcd_path", full_pcd_path, "/opt/src");
+    nh.param<string>("colored_pcd_path", colored_pcd_path, "/opt/src");
+
+    LOG_S(INFO) << "hba_path: " << hba_path << std::endl;
+    LOG_S(INFO) << "image_pose_path: " << image_pose_path << std::endl;
+    LOG_S(INFO) << "full_pcd_path: " << full_pcd_path << std::endl;
+    LOG_S(INFO) << "colored_pcd_path: " << colored_pcd_path << std::endl;
+
+
+
     calibration_data::camera.init(nh);
 
     LOG_S(INFO) << "running point cloud segmentation..." << std::endl;
@@ -91,7 +107,7 @@ int main(int argc, char* argv[]) {
     std::unordered_map<std::uint16_t, std::string> frame_idx_to_image;
 
     if (color_point_cloud) {
-        for (auto& p : boost::filesystem::recursive_directory_iterator("/home/inkers/satyajit/catkin_pv_lio/edge_segment_testing/image_pose/")) {
+        for (auto& p : boost::filesystem::recursive_directory_iterator(image_pose_path)) {
             if (p.path().extension() == std::string(".png")) {
                 // LOG_S(INFO) << p.path() << std::endl;
 
@@ -124,7 +140,7 @@ int main(int argc, char* argv[]) {
     // std::string pose_file = "/home/inkers/satyajit/dlf_gf_hba_dump/pose.json";
     // std::string pose_file = "/home/inkers/satyajit/catkin_pv_lio/segment_testing/hba_dump/pose.json";
 
-    std::string pose_file = "/home/inkers/satyajit/catkin_pv_lio/edge_segment_testing/hba_dump/pose.json";
+    std::string pose_file = hba_path + "/pose.json";
     {
         std::fstream file;
         file.open(pose_file);
@@ -147,7 +163,7 @@ int main(int argc, char* argv[]) {
     // std::string hba_pcd_base_path = "/home/inkers/satyajit/dlf_gf_hba_dump/pcd/";
     // std::string hba_pcd_base_path = "/home/inkers/satyajit/catkin_pv_lio/segment_testing/hba_dump/pcd/";
 
-    std::string hba_pcd_base_path = "/home/inkers/satyajit/catkin_pv_lio/edge_segment_testing/hba_dump/pcd/";
+    std::string hba_pcd_base_path = hba_path + "/pcd/";
 
     pcl::PointCloud<pcl::PointXYZINormal>
         full_pc;
@@ -202,14 +218,12 @@ int main(int argc, char* argv[]) {
     }
 
     LOG_S(INFO) << "saving full pcd" << std::endl;
-    // pcl::io::savePCDFileBinary("/home/inkers/satyajit/catkin_pv_lio/segmentation_test2/full_cloud.pcd", full_pc);
-    // pcl::io::savePCDFileBinary("/home/inkers/satyajit/catkin_pv_lio/segmentation_test2/full_colored_cloud.pcd", full_colored_pc);
+    
 
-    pcl::io::savePCDFileBinary("/home/inkers/satyajit/catkin_pv_lio/edge_segment_testing/full_cloud.pcd", full_pc);
-    pcl::io::savePCDFileBinary("/home/inkers/satyajit/catkin_pv_lio/edge_segment_testing/full_colored_cloud.pcd", full_colored_pc);
+    pcl::io::savePLYFileBinary(full_pcd_path, full_pc);
+    pcl::io::savePLYFileBinary(colored_pcd_path, full_colored_pc);
 
-    // pcl::io::savePCDFileBinary("/home/inkers/satyajit/catkin_pv_lio/segment_testing/full_cloud.pcd", full_pc);
-    // pcl::io::savePCDFileBinary("/home/inkers/satyajit/catkin_pv_lio/segment_testing/full_colored_cloud.pcd", full_colored_pc);
+    
 
     // for (auto& p : std::filesystem::recursive_directory_iterator("/home/inkers/satyajit/catkin_pv_lio/segmentation_test/hba_dump/pcd/")) {
     //     if (p.path().extension() == std::string(".pcd")) {
