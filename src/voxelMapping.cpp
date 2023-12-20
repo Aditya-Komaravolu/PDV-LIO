@@ -135,6 +135,65 @@ bool lidar_pushed, flg_first_scan = true, flg_exit = false, flg_EKF_inited;
 bool scan_pub_en = false, dense_pub_en = false, scan_body_pub_en = false;
 bool kill_on_finish = false;
 
+namespace thresholds{
+    template <class ContainerAllocator>
+    struct mapping_tweak_values_ { 
+    typedef mapping_tweak_values_<ContainerAllocator> Type;
+
+
+    mapping_tweak_values_()
+    : header()
+    , max_layer(0) 
+    , plannar_threshold(0.0)
+    , layer_point_size() {
+    
+    }
+
+    mapping_tweak_values_(const ContainerAllocator& _alloc)
+    : header(_alloc)
+    , max_layer(0)
+    , plannar_threshold(0)
+    , layer_point_size()  {
+    (void)_alloc;
+    }
+
+
+    typedef  ::std_msgs::Header_<ContainerAllocator>  _header_type;
+    _header_type header;
+
+    typedef int max_layer_value;
+    max_layer_value max_layer;
+
+    typedef double plane_threshold;
+    plane_threshold plannar_threshold;
+
+    typedef vector<double> point_size_in_layers;
+    point_size_in_layers layer_point_size;
+
+
+    typedef boost::shared_ptr<thresholds::mapping_tweak_values_<ContainerAllocator> > Ptr;
+    typedef boost::shared_ptr<thresholds::mapping_tweak_values_<ContainerAllocator> const> ConstPtr;
+
+    };
+
+    typedef thresholds::mapping_tweak_values_<std::allocator<void> > mapping_tweak_values;
+
+    typedef boost::shared_ptr<thresholds::mapping_tweak_values > mapping_tweak_valuesPtr;
+    typedef boost::shared_ptr<thresholds::mapping_tweak_values const> mapping_tweak_valuesConstPtr;
+
+
+}
+
+struct mapping_tweak_values { 
+    int max_layer;
+    double plannar_threshold;
+    vector<int> layer_point_size;
+    ros::Time env_timestamp;
+};
+
+typedef mapping_tweak_values tweak_values;
+
+
 vector<vector<int>> pointSearchInd_surf;
 vector<PointVector> Nearest_Points;
 vector<double> extrinT(3, 0.0);
@@ -144,6 +203,8 @@ std::deque<PointCloudXYZINormal::Ptr> lidar_buffer;
 std::deque<sensor_msgs::Imu::ConstPtr> imu_buffer;
 std::deque<sensor_msgs::ImageConstPtr> cam_buffer;
 std::deque<pv_lio::Float32Stamped::ConstPtr> voxel_size_buffer;
+// std::deque<mapping_tweak_values> con;
+std::deque<thresholds::mapping_tweak_values::ConstPtr> threshold_values_buffer;
 std::deque<double> small_room_timestamps;
 std::deque<std_msgs::String::ConstPtr> small_room_msgs;
 
@@ -478,6 +539,8 @@ void publish_small_room_info(const std_msgs::String::ConstPtr& msg){
 
     pv_lio::Float32Stamped timestamp;
 
+    thresholds::mapping_tweak_values thres_ptr;
+
 
     timestamp.header.stamp = ros_timestamp;
   
@@ -501,12 +564,47 @@ void publish_small_room_info(const std_msgs::String::ConstPtr& msg){
     std::cout<< "test:" << data.substr(data.find("In")+3, data.find("Room")-4) << endl;
 
     if (small_str == data.substr(data.find("In")+3, data.find("Room")-4)) {
+        
         LOG_S(INFO) << "Entered small room. Setting VOXEL SIZE: 0.1 , DOWN SAMPLE: 0.05 " << std::endl;
+        
+        int new_max_layer = 9;
+        vector<double> new_layer_point_size;
+        for(int i=0; i <= new_max_layer; i++){ new_layer_point_size.push_back(3);}
+        double planar_thres = 0.0001;
+
         timestamp.data = 0.1;
-        // max_voxel_size = 0.1;
+
+        // max_voxel_size = 0.1;s
         // filter_size_surf_min = 0.05;
         pv_lio::Float32Stamped::ConstPtr ptr_timestamp = boost::make_shared<pv_lio::Float32Stamped>(timestamp);
         voxel_size_buffer.push_back(ptr_timestamp);
+
+
+
+        thres_ptr.header.stamp = ros_timestamp;
+        thres_ptr.max_layer = new_max_layer;
+        thres_ptr.plannar_threshold = planar_thres;
+
+        thres_ptr.layer_point_size = new_layer_point_size;
+
+        thresholds::mapping_tweak_values::ConstPtr push_thres = boost::make_shared<thresholds::mapping_tweak_values>(thres_ptr);
+
+        threshold_values_buffer.push_back(push_thres);
+
+        std::cout<< "******************************"<< endl;
+        std::cout << "THRESHOLD UPDATED PARAMS" << endl;
+        std::cout << "******************************"<< endl;
+        std::cout<< "Timestamp: " << ros_timestamp << endl;
+        std::cout<< "Max layer: " << new_max_layer << endl;
+        std::cout<< "Layer Point Size: [";
+        for (const auto& value : new_layer_point_size) {
+                std::cout << value << " ,";
+            }
+        std::cout << " ]" << endl;
+        std::cout<< "Planar Threshold: " << planar_thres << endl;
+        std::cout<< "******************************"<< endl;
+
+
 
 
     } 
@@ -517,6 +615,35 @@ void publish_small_room_info(const std_msgs::String::ConstPtr& msg){
         // filter_size_surf_min = filter_size_surf_min_default;
         pv_lio::Float32Stamped::ConstPtr ptr_timestamp = boost::make_shared<pv_lio::Float32Stamped>(timestamp);
         voxel_size_buffer.push_back(ptr_timestamp);
+
+        int new_max_layer = 4;
+        vector<double> new_layer_point_size;
+        for(int i=0; i <= new_max_layer; i++){ new_layer_point_size.push_back(5);}
+        double planar_thres = 0.01;
+
+        thres_ptr.header.stamp = ros_timestamp;
+        thres_ptr.max_layer = new_max_layer;
+        thres_ptr.plannar_threshold = planar_thres;
+
+        thres_ptr.layer_point_size = new_layer_point_size;
+
+        thresholds::mapping_tweak_values::ConstPtr push_thres = boost::make_shared<thresholds::mapping_tweak_values>(thres_ptr);
+
+        threshold_values_buffer.push_back(push_thres);
+
+        std::cout<< "******************************"<< endl;
+        std::cout << "THRESHOLD UPDATED PARAMS" << endl;
+        std::cout << "******************************"<< endl;
+        std::cout<< "Timestamp: " << ros_timestamp << endl;
+        std::cout<< "Max layer: " << new_max_layer << endl;
+        std::cout<< "Layer Point Size: [";
+        for (const auto& value : new_layer_point_size) {
+                std::cout << value << " ,";
+            }
+        std::cout << " ]" << endl;
+        std::cout<< "Planar Threshold: " << planar_thres << endl;
+        std::cout<< "******************************"<< endl;
+
         }
     else {
         ROS_WARN("Room not specified! Msg DOESNT contain (Small/Large)");
@@ -636,17 +763,38 @@ std::tuple<bool, bool> sync_packages(MeasureGroup &meas) {
     }
 
     // set voxel size if current timestamp > voxel message timestamp
-    if (!voxel_size_buffer.empty()) {
+    if (!voxel_size_buffer.empty() && !threshold_values_buffer.empty()) {
         auto front = voxel_size_buffer.front();
+
+        auto first_thres_values = threshold_values_buffer.front();
 
         // LOG_S(INFO) << "front voxel timestamp " << front->header.stamp.toSec() << ", lidar last timestamp: " << last_timestamp_lidar << std::endl;
 
-        if (lidar_end_time > front->header.stamp.toSec()) {
+        if (lidar_end_time > front->header.stamp.toSec() && lidar_end_time > first_thres_values->header.stamp.toSec()) {
             if (common::debug_small_rooms){
                 LOG_S(WARNING) << std::setprecision(20) << "setting max_voxel_size to: " << front->data << " set voxel timestamp: " << front->header.stamp.toSec() << " lidar last timestamp: " << last_timestamp_lidar << std::endl;
             }
             max_voxel_size = front->data;
             voxel_size_buffer.pop_front();
+            max_layer = first_thres_values->max_layer;
+            min_eigen_value = first_thres_values->plannar_threshold;
+            layer_point_size = first_thres_values->layer_point_size;
+            threshold_values_buffer.pop_front();
+
+            std::cout << " " << endl;
+            std::cout<< "\033[1;32m******************************\033[0m" << endl;
+            std::cout << "\033[1;32mTHRESHOLD UPDATED at lidar time: \033[0m" << lidar_end_time << endl;
+            std::cout << "\033[1;32m******************************\033[0m" << endl;
+            std::cout<< "\033[1;32mTimestamp: \033[0m" << first_thres_values->header.stamp.toSec() << endl;
+            std::cout<< "\033[1;32mMax layer: \033[0m" << max_layer << endl;
+            std::cout<< "\033[1;32mLayer Point Size: [\033[0m";
+            for (const auto& value : layer_point_size) {
+                    std::cout << value << "\033[1;32m ,\033[0m";
+                }
+            std::cout << "\033[1;32m ]\033[0m" << endl;
+            std::cout<< "\033[1;32mPlanar Threshold: \033[0m" << min_eigen_value << endl;
+            std::cout<< "\033[1;32m******************************\033[0m" << endl;
+
         }
     }
 
