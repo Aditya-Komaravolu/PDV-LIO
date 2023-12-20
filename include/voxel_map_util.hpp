@@ -863,6 +863,21 @@ void BuildResidualListOMP(const unordered_map<VOXEL_LOC, OctoTree *> &voxel_map,
                           const std::vector<pointWithCov> &pv_list,
                           std::vector<ptpl> &ptpl_list,
                           std::vector<Eigen::Vector3d> &non_match) {
+    double initial_voxel_size = voxel_size;
+    bool retry = true;
+
+    // std::mutex mylock;
+    // ptpl_list.clear();
+    // std::vector<ptpl> all_ptpl_list(pv_list.size());
+    // std::vector<bool> useful_ptpl(pv_list.size());
+    // std::vector<size_t> index(pv_list.size());
+    // for (size_t i = 0; i < index.size(); ++i) {
+    //     index[i] = i;
+    //     useful_ptpl[i] = false;
+    // }
+
+    while (retry) {
+    // Original function code
     std::mutex mylock;
     ptpl_list.clear();
     std::vector<ptpl> all_ptpl_list(pv_list.size());
@@ -881,7 +896,7 @@ void BuildResidualListOMP(const unordered_map<VOXEL_LOC, OctoTree *> &voxel_map,
         pointWithCov pv = pv_list[i];
         float loc_xyz[3];
         for (int j = 0; j < 3; j++) {
-            loc_xyz[j] = pv.point_world[j] / voxel_size;
+            loc_xyz[j] = pv.point_world[j] / initial_voxel_size;
             if (loc_xyz[j] < 0) {
                 loc_xyz[j] -= 1.0;
             }
@@ -947,6 +962,14 @@ void BuildResidualListOMP(const unordered_map<VOXEL_LOC, OctoTree *> &voxel_map,
     for (size_t i = 0; i < useful_ptpl.size(); i++) {
         if (useful_ptpl[i]) {
             ptpl_list.push_back(all_ptpl_list[i]);
+        }
+    }
+    if (ptpl_list.empty() && std::abs(voxel_size - initial_voxel_size) < 1) {
+            initial_voxel_size += 0.05;
+            std::cout << "Retrying with increased voxel size: " << initial_voxel_size << std::endl;
+    } else {
+            retry = false; // Exit the retry loop if ptpl_list is not empty
+            // break;
         }
     }
 }

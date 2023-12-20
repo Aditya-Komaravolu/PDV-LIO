@@ -102,7 +102,7 @@ Visualization Manager:
           Use Fixed Frame: true
           Use rainbow: true
           Value: true
-        - Alpha: 0.05000000074505806
+        - Alpha: 0.1
           Autocompute Intensity Bounds: false
           Autocompute Value Bounds:
             Max Value: -4.0049309730529785
@@ -126,7 +126,7 @@ Visualization Manager:
           Selectable: true
           Size (Pixels): 1
           Size (m): 0.05000000074505806
-          Style: Flat Squares
+          Style: Points
           Topic: /cloud_registered
           Unreliable: false
           Use Fixed Frame: true

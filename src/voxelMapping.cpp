@@ -495,7 +495,12 @@ void publish_small_room_info(const std_msgs::String::ConstPtr& msg){
         // if (std::abs(last_timestamp_lidar - current_timestamp) < timestamp_tolerance){
             // std::cout << "EQUAL!!" << endl;        
 
-    if (data.find("Small Room") != std::string::npos) {
+    std::string small_str = "Small";
+    std::string large_str = "Large";
+
+    std::cout<< "test:" << data.substr(data.find("In")+3, data.find("Room")-4) << endl;
+
+    if (small_str == data.substr(data.find("In")+3, data.find("Room")-4)) {
         LOG_S(INFO) << "Entered small room. Setting VOXEL SIZE: 0.1 , DOWN SAMPLE: 0.05 " << std::endl;
         timestamp.data = 0.1;
         // max_voxel_size = 0.1;
@@ -505,13 +510,16 @@ void publish_small_room_info(const std_msgs::String::ConstPtr& msg){
 
 
     } 
-    else if (data.find("Large Room") != std::string::npos) {
+    else if (large_str == data.substr(data.find("In")+3, data.find("Area")-4)) {
         LOG_S(INFO) << "Entered Large Room. Setting VOXEL SIZE: " << default_voxel_size << ", DOWN SAMPLE: " << filter_size_surf_min_default << std::endl;
         timestamp.data = default_voxel_size;
         // max_voxel_size = default_voxel_size;
         // filter_size_surf_min = filter_size_surf_min_default;
         pv_lio::Float32Stamped::ConstPtr ptr_timestamp = boost::make_shared<pv_lio::Float32Stamped>(timestamp);
         voxel_size_buffer.push_back(ptr_timestamp);
+        }
+    else {
+        ROS_WARN("Room not specified! Msg DOESNT contain (Small/Large)");
 
     }
 
@@ -634,7 +642,9 @@ std::tuple<bool, bool> sync_packages(MeasureGroup &meas) {
         // LOG_S(INFO) << "front voxel timestamp " << front->header.stamp.toSec() << ", lidar last timestamp: " << last_timestamp_lidar << std::endl;
 
         if (lidar_end_time > front->header.stamp.toSec()) {
-            LOG_S(WARNING) << std::setprecision(20) << "setting max_voxel_size to: " << front->data << " set voxel timestamp: " << front->header.stamp.toSec() << " lidar last timestamp: " << last_timestamp_lidar << std::endl;
+            if (common::debug_small_rooms){
+                LOG_S(WARNING) << std::setprecision(20) << "setting max_voxel_size to: " << front->data << " set voxel timestamp: " << front->header.stamp.toSec() << " lidar last timestamp: " << last_timestamp_lidar << std::endl;
+            }
             max_voxel_size = front->data;
             voxel_size_buffer.pop_front();
         }
@@ -1041,6 +1051,10 @@ void observation_model_share(state_ikfom &s, esekfom::dyn_share_datastruct<doubl
     // 根据匹配结果 设置H和R的维度
     // h_x是观测值对状态量的导数 TODO 为什么不加上状态量对状态量误差的导数？？？？像quaternion那本书？
     effct_feat_num = ptpl_list.size();
+
+    // auto debug_val = voxel_size_buffer.front();
+    // double debug_data =  debug_val->data;
+    std::cout << "Effective features num: " << effct_feat_num << endl;
     if (effct_feat_num < 1) {
         ekfom_data.valid = false;
         ROS_WARN("No Effective Points! \n");
@@ -1155,6 +1169,7 @@ void observation_model_share(state_ikfom &s, esekfom::dyn_share_datastruct<doubl
 
     // std::printf("Effective Points: %d\n", effct_feat_num);
     res_mean_last = total_residual / effct_feat_num;
+    std::cout << "Eff Points: " << effct_feat_num << " Residual Mean: " << res_mean_last ;
     // std::printf("res_mean: %f\n", res_mean_last);
     // std::printf("ef_num: %d\n", effct_feat_num);
 }
@@ -1259,6 +1274,7 @@ int main(int argc, char **argv) {
     nh.param<int>("mapping/max_cov_points_size", max_cov_points_size, 100);
     nh.param<vector<double>>("mapping/layer_point_size", layer_point_size, vector<double>());
     nh.param<int>("mapping/max_layer", max_layer, 2);
+    LOG_S(INFO) << "Oct Tree max layers : "<< max_layer << endl;
     nh.param<double>("mapping/voxel_size", max_voxel_size, 1.0);
     nh.param<double>("mapping/down_sample_size", filter_size_surf_min, 0.5);
     std::cout << "filter_size_surf_min:" << filter_size_surf_min << std::endl;
@@ -1267,7 +1283,8 @@ int main(int argc, char **argv) {
     nh.param<vector<double>>("mapping/extrinsic_T", extrinT, vector<double>());
     nh.param<vector<double>>("mapping/extrinsic_R", extrinR, vector<double>());
     nh.param<bool>("mapping/enable_coloring", enable_coloring, false);
-    nh.param<bool>("mapping/enable_small_rooms", enable_small_rooms , true);
+    nh.param<bool>("mapping/enable_small_rooms", enable_small_rooms , false);
+    LOG_S(INFO) << "Small room status:" << enable_small_rooms << std::endl;
 
     // noise model params
     nh.param<double>("noise_model/ranging_cov", ranging_cov, 0.02);
@@ -1341,9 +1358,9 @@ int main(int argc, char **argv) {
 
     ros::Subscriber sub_voxel_size = nh.subscribe("/set_voxel_size", 10000, set_voxel_size_cbk);
 
-    // if (enable_small_rooms){
+    // if (enable_small_rooms==1){
     ros::Subscriber en_small_rooms = nh.subscribe(small_room_topic, 1000, publish_small_room_info);
-
+    // }
     // if (!small_room_timestamps.empty()){
     // ros::Subscriber change_vs = nh.subscribe(lid_topic, 200000, set_dynamic_voxelization_params_cbk);
     // }
@@ -1484,7 +1501,7 @@ int main(int argc, char **argv) {
                 }
 
                 buildVoxelMap(pv_list, max_voxel_size, max_layer, layer_size,
-                              max_points_size, max_points_size, min_eigen_value,
+                              max_points_size, max_cov_points_size, min_eigen_value,
                               voxel_map);
                 LOG_S(INFO) << "build voxel map" << std::endl;
 

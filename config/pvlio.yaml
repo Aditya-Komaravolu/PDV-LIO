@@ -9,6 +9,7 @@ common:
 
 camera:
     image_topic: "/camera_out"
+    #mid2
     extrinsic_RT: 
             [0.00837535,-0.999735,-0.0214202,-0.0441428,
             0.404159,0.0229777,-0.9144,-0.0305941,
@@ -20,26 +21,67 @@ camera:
             0.     ,    0.     ,    1.  ]
     distCoeff:
             [-0.233781, 0.077340, -0.000582, -0.000710, 0.000000]
+    
 
-preprocess:
-    lidar_type: 1                # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR,
+    #mid3 1080p
+    # intrinsic:
+    #         # [1046.604161, 0.000000, 982.439962,
+    #         # 0.000000, 1047.004052, 535.030771,
+    #         # 0.000000, 0.000000, 1.000000]
+
+    #         [1038.559497, 0.000000, 985.082919,
+    #         0.000000, 1038.893916, 534.304002,
+    #         0.000000, 0.000000, 1.000000]
+
+    # # distCoeff:  [-0.289714, 0.061415, 0.001272, 0.001595, 0.000000]
+    # distCoeff: [ -0.287493, 0.061192, 0.002369, 0.001403, 0.000000]
+
+    # extrinsic_RT:
+    #         [ 0.0225933,   -0.999683,   0.0110671,   0.0683562,
+    #         0.409996, -0.00083128,   -0.912087,  -0.0305966,
+    #         0.911807,   0.0251446,    0.409848,   0.0621397,
+    #         0       ,    0       ,    0       ,    1]
+
+    #         # [0.0225933,    0.409996,    0.911807,  -0.0456594,
+    #         # -0.999683, -0.00083128,   0.0251446,   0.0667467,
+    #         # 0.0110671,   -0.912087,    0.409848,  -0.0541311,
+    #         #         0,           0,           0,           1]
+    
+    #mid3 720p
+    # intrinsic:
+    #         [704.311830, 0.000000, 654.734139,
+    #         0.000000, 705.605085, 355.897277,
+    #         0.000000, 0.000000, 1.000000]
+
+    # # distCoeff:  [-0.289714, 0.061415, 0.001272, 0.001595, 0.000000]
+    # distCoeff: [-0.293328, 0.065314, 0.001174, 0.001899, 0.000000]
+
+    # extrinsic_RT:
+    #             [0.0207909,  -0.999756, 0.00741309,   0.117772,
+    #             0.41139, 0.00179689,  -0.911458, -0.0303919,
+    #             0.911222,  0.0219997,   0.411327,   0.178701,
+    #                     0,          0,          0,          1]
+
+preprocess,:
+    lidar,_type: 1   ,             # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR,
     scan_line: 6
     scan_rate: 10
-    blind: 0.1
+    blind: 0.0
     point_filter_num: 1
 
 mapping:
     down_sample_size: 0.1
-    max_iteration: 10
+    max_iteration: 20
     voxel_size: 0.3
     # down_sample_size: 0.1
     # max_iteration: 4
     # voxel_size: 0.25
-    max_layer: 4                # 4 layer, 0, 1, 2, 3
-    layer_point_size: [ 5, 5, 5, 5, 5 ]
-    plannar_threshold: 0.01
-    max_points_size: 1000
-    max_cov_points_size: 1000
+    max_layer: 9               # 4 layer, 0, 1, 2, 3
+    layer_point_size: [ 1, 2, 3, 3, 3, 4, 4, 4, 5]
+    # layer_point_size: [ 3, 3, 3, 3, 3]
+    plannar_threshold: 0.0001
+    max_points_size: 5000
+    max_cov_points_size: 5000
     enable_small_rooms: true
 
     enable_coloring: true
@@ -77,7 +119,7 @@ noise_model:
 publish:
     pub_color_map: true
     pub_voxel_map: false
-    publish_max_voxel_layer: 2         # only publish 0,1,2 layer's plane
+    publish_max_voxel_layer: 5         # only publish 0,1,2 layer's plane
     path_en:  true
     scan_publish_en:  true       # false: close all the point cloud output
     dense_publish_en: true       # false: low down the points number in a global-frame point clouds scan.
