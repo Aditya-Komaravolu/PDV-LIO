@@ -772,7 +772,8 @@ std::tuple<bool, bool> sync_packages(MeasureGroup &meas) {
 
         if (lidar_end_time > front->header.stamp.toSec() && lidar_end_time > first_thres_values->header.stamp.toSec()) {
             if (common::debug_small_rooms){
-                LOG_S(WARNING) << std::setprecision(20) << "setting max_voxel_size to: " << front->data << " set voxel timestamp: " << front->header.stamp.toSec() << " lidar last timestamp: " << last_timestamp_lidar << std::endl;
+                std::cout << " " <<endl;
+                std::cout << "\033[1;32msetting max_voxel_size to: \033[0m" << front->data << "\033[1;32m set voxel timestamp: \033[0m" << front->header.stamp.toSec() << "\033[1;32m lidar last timestamp: \033[0m" << last_timestamp_lidar << std::endl;
             }
             max_voxel_size = front->data;
             voxel_size_buffer.pop_front();
@@ -1202,7 +1203,8 @@ void observation_model_share(state_ikfom &s, esekfom::dyn_share_datastruct<doubl
 
     // auto debug_val = voxel_size_buffer.front();
     // double debug_data =  debug_val->data;
-    std::cout << "Effective features num: " << effct_feat_num << endl;
+    // std::cout << "Effective features num: " << effct_feat_num << " Max layer: " << max_layer << " voxel size: " << max_voxel_size << endl;
+
     if (effct_feat_num < 1) {
         ekfom_data.valid = false;
         ROS_WARN("No Effective Points! \n");
