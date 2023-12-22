@@ -184,6 +184,7 @@ namespace thresholds{
 
 }
 
+
 struct mapping_tweak_values { 
     int max_layer;
     double plannar_threshold;
@@ -203,6 +204,7 @@ std::deque<PointCloudXYZINormal::Ptr> lidar_buffer;
 std::deque<sensor_msgs::Imu::ConstPtr> imu_buffer;
 std::deque<sensor_msgs::ImageConstPtr> cam_buffer;
 std::deque<pv_lio::Float32Stamped::ConstPtr> voxel_size_buffer;
+std::deque<pv_lio::Float32Stamped::ConstPtr> down_sample_buffer;
 // std::deque<mapping_tweak_values> con;
 std::deque<thresholds::mapping_tweak_values::ConstPtr> threshold_values_buffer;
 std::deque<double> small_room_timestamps;
@@ -537,12 +539,13 @@ void publish_small_room_info(const std_msgs::String::ConstPtr& msg){
     // std::cout << "Current lidar endtime: " << Measures.lidar_beg_time << endl;
     // std::cout << "Difference in  lidar timestamp and small room timestamp: " << last_timestamp_lidar  - current_timestamp << endl;
 
-    pv_lio::Float32Stamped timestamp;
+    pv_lio::Float32Stamped voxel_timestamp, down_sample_timestamp;
 
     thresholds::mapping_tweak_values thres_ptr;
 
 
-    timestamp.header.stamp = ros_timestamp;
+    voxel_timestamp.header.stamp = ros_timestamp;
+    down_sample_timestamp.header.stamp = ros_timestamp;
   
     // timestamp.data = 0.1;
 
@@ -572,14 +575,16 @@ void publish_small_room_info(const std_msgs::String::ConstPtr& msg){
         for(int i=0; i <= new_max_layer; i++){ new_layer_point_size.push_back(3);}
         double planar_thres = 0.0001;
 
-        timestamp.data = 0.1;
+        voxel_timestamp.data = 0.1;
+        down_sample_timestamp.data = 0.05;
 
         // max_voxel_size = 0.1;s
         // filter_size_surf_min = 0.05;
-        pv_lio::Float32Stamped::ConstPtr ptr_timestamp = boost::make_shared<pv_lio::Float32Stamped>(timestamp);
-        voxel_size_buffer.push_back(ptr_timestamp);
+        pv_lio::Float32Stamped::ConstPtr voxel_ptr_timestamp = boost::make_shared<pv_lio::Float32Stamped>(voxel_timestamp);
+        voxel_size_buffer.push_back(voxel_ptr_timestamp);
 
-
+        pv_lio::Float32Stamped::ConstPtr down_sample_ptr_timestamp = boost::make_shared<pv_lio::Float32Stamped>(down_sample_timestamp);
+        down_sample_buffer.push_back(down_sample_ptr_timestamp);
 
         thres_ptr.header.stamp = ros_timestamp;
         thres_ptr.max_layer = new_max_layer;
@@ -610,11 +615,15 @@ void publish_small_room_info(const std_msgs::String::ConstPtr& msg){
     } 
     else if (large_str == data.substr(data.find("In")+3, data.find("Area")-4)) {
         LOG_S(INFO) << "Entered Large Room. Setting VOXEL SIZE: " << default_voxel_size << ", DOWN SAMPLE: " << filter_size_surf_min_default << std::endl;
-        timestamp.data = default_voxel_size;
+        voxel_timestamp.data = default_voxel_size;
+        down_sample_timestamp.data = filter_size_surf_min_default;
         // max_voxel_size = default_voxel_size;
         // filter_size_surf_min = filter_size_surf_min_default;
-        pv_lio::Float32Stamped::ConstPtr ptr_timestamp = boost::make_shared<pv_lio::Float32Stamped>(timestamp);
-        voxel_size_buffer.push_back(ptr_timestamp);
+        pv_lio::Float32Stamped::ConstPtr voxel_ptr_timestamp = boost::make_shared<pv_lio::Float32Stamped>(voxel_timestamp);
+        voxel_size_buffer.push_back(voxel_ptr_timestamp);
+
+        pv_lio::Float32Stamped::ConstPtr down_sample_ptr_timestamp = boost::make_shared<pv_lio::Float32Stamped>(down_sample_timestamp);
+        down_sample_buffer.push_back(down_sample_ptr_timestamp);
 
         int new_max_layer = 4;
         vector<double> new_layer_point_size;
@@ -685,7 +694,7 @@ void set_dynamic_voxelization_params_cbk(const livox_ros_driver::CustomMsg::Cons
             if (msg_data.find("Small Room") != std::string::npos) {
                 LOG_S(INFO) << "Entered small room. Setting VOXEL SIZE: 0.1 , DOWN SAMPLE: 0.05 " << std::endl;
                 max_voxel_size = 0.1;
-                filter_size_surf_min = 0.05;
+                filter_size_surf_min = 0.03;
 
             } 
             else if (msg_data.find("Large Room") != std::string::npos) {
@@ -768,19 +777,27 @@ std::tuple<bool, bool> sync_packages(MeasureGroup &meas) {
 
         auto first_thres_values = threshold_values_buffer.front();
 
+        auto new_downsample_value = down_sample_buffer.front();
+        
         // LOG_S(INFO) << "front voxel timestamp " << front->header.stamp.toSec() << ", lidar last timestamp: " << last_timestamp_lidar << std::endl;
 
-        if (lidar_end_time > front->header.stamp.toSec() && lidar_end_time > first_thres_values->header.stamp.toSec()) {
+        if (lidar_end_time > front->header.stamp.toSec() && lidar_end_time > first_thres_values->header.stamp.toSec() && lidar_end_time > new_downsample_value->header.stamp.toSec()) {
             if (common::debug_small_rooms){
-                std::cout << " " <<endl;
-                std::cout << "\033[1;32msetting max_voxel_size to: \033[0m" << front->data << "\033[1;32m set voxel timestamp: \033[0m" << front->header.stamp.toSec() << "\033[1;32m lidar last timestamp: \033[0m" << last_timestamp_lidar << std::endl;
+
+                std::cout << endl << "\033[1;32msetting max_voxel_size to: \033[0m" << front->data << "\033[1;32m set voxel timestamp: \033[0m" << front->header.stamp.toSec() << "\033[1;32m lidar last timestamp: \033[0m" << last_timestamp_lidar << std::endl;
+                std::cout << endl << "\033[1;32msetting down_sample ratio to: \033[0m" << new_downsample_value->data << "\033[1;32m set downsample ratio timestamp: \033[0m" << new_downsample_value->header.stamp.toSec() << "\033[1;32m lidar last timestamp: \033[0m" << last_timestamp_lidar << std::endl;
+
             }
             max_voxel_size = front->data;
             voxel_size_buffer.pop_front();
             max_layer = first_thres_values->max_layer;
             min_eigen_value = first_thres_values->plannar_threshold;
             layer_point_size = first_thres_values->layer_point_size;
+            downSizeFilterSurf.setLeafSize(new_downsample_value->data, new_downsample_value->data, new_downsample_value->data);
             threshold_values_buffer.pop_front();
+            down_sample_buffer.pop_front();
+            
+
 
             std::cout << " " << endl;
             std::cout<< "\033[1;32m******************************\033[0m" << endl;
@@ -1692,9 +1709,12 @@ int main(int argc, char **argv) {
             double t_update_end = omp_get_wtime();
             sum_optimize_time += t_update_end - t_update_start;
 
+            std::cout<< "LIDAR PREV STATE :" << pos_lid <<endl;
             state_point = kf.get_x();
             euler_cur = SO3ToEuler(state_point.rot);
             pos_lid = state_point.pos + state_point.rot * state_point.offset_T_L_I;
+            std::cout<< "LIDAR UPDATE STATE :" << pos_lid <<endl;
+
             geoQuat.x = state_point.rot.coeffs()[0];
             geoQuat.y = state_point.rot.coeffs()[1];
             geoQuat.z = state_point.rot.coeffs()[2];

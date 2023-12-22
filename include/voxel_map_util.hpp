@@ -143,6 +143,13 @@ class OctoTree {
             plane->covariance += pv.point * pv.point.transpose();
             plane->center += pv.point;
         }
+        //purely for testing , inspired from voxelmapping++    
+        // for (auto pv : points) {
+        //     plane->points_size++;
+        //     plane->center = (plane->center * (plane->points_size - 1) + pv.point) / plane->points_size;
+        //     plane->covariance = plane->covariance + pv.point * pv.point.transpose();
+
+        // }
         plane->center = plane->center / plane->points_size;
         plane->covariance = plane->covariance / plane->points_size -
                             plane->center * plane->center.transpose();
@@ -697,6 +704,8 @@ void build_single_residual(const pointWithCov &pv, const OctoTree *current_octo,
         // HACK 因为将点划分进voxel的时候只用了第一层voxel 这个voxel可能比较大 遍历到的这个子voxel距离点可能还比较远
         float range_dis = sqrt(dis_to_center - dis_to_plane * dis_to_plane);
 
+        // std::cout<< endl << "Range distance: " << range_dis << "plane_radius: "  <<plane.radius << "plane_radius *3 : " << radius_k * plane.radius << endl;
+ 
         if (range_dis <= radius_k * plane.radius) {
             // 计算点面距离的方差
             Eigen::Matrix<double, 1, 6> J_nq;

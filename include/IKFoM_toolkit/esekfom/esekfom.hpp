@@ -2297,6 +2297,12 @@ public:
                 P_ = L_ - K_x.template block<n, 12>(0, 0) * P_.template block<12, n>(0, 0);
                 //}
                 solve_time += omp_get_wtime() - solve_start;
+				// std::cout<< "\n************************************************" <<endl;
+				// std::cout<< "KALMAN GAIN FOR STATE UPDATE: \n" << K_x.format(Eigen::IOFormat(Eigen::FullPrecision, 0, ", ", "\n", "[", "]", "[", "]")) << std::endl;
+				// std::cout<< "\n************************************************" <<endl;
+				// std::cout<< "KALMAN GAIN FOR MEASUREMENT UPDATE: \n" << endl << K_h << endl; 
+				// std::cout<< "\n************************************************" <<endl;
+
                 return;
             }
             solve_time += omp_get_wtime() - solve_start;
