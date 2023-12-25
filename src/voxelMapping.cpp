@@ -246,6 +246,11 @@ double default_voxel_size = 1.0;
 double small_room_voxel_size = 0.1;
 double small_room_downsample = 0.05;
 
+int small_room_max_layer;
+int small_room_max_layer_point_size;
+double small_room_planar_threshold;
+
+
 std::vector<int> layer_size;
 
 double ranging_cov = 0.0;
@@ -572,10 +577,12 @@ void publish_small_room_info(const std_msgs::String::ConstPtr& msg){
         
         LOG_S(INFO) << "Entered small room. Setting VOXEL SIZE: 0.1 , DOWN SAMPLE: 0.05 " << std::endl;
         
-        int new_max_layer = 9;
+        int new_max_layer = small_room_max_layer;
         vector<double> new_layer_point_size;
-        for(int i=0; i <= new_max_layer; i++){ new_layer_point_size.push_back(3);}
-        double planar_thres = 0.0001;
+        for(int i=0; i <= new_max_layer; i++){ new_layer_point_size.push_back(small_room_max_layer_point_size);}
+        // double planar_thres = 0.001;
+        double planar_thres = small_room_planar_threshold;
+
 
         // voxel_timestamp.data = 0.1;
         // down_sample_timestamp.data = 0.05;
@@ -631,7 +638,7 @@ void publish_small_room_info(const std_msgs::String::ConstPtr& msg){
         pv_lio::Float32Stamped::ConstPtr down_sample_ptr_timestamp = boost::make_shared<pv_lio::Float32Stamped>(down_sample_timestamp);
         down_sample_buffer.push_back(down_sample_ptr_timestamp);
 
-        int new_max_layer = 4;
+        int new_max_layer = max_layer;
         vector<double> new_layer_point_size;
         for(int i=0; i <= new_max_layer; i++){ new_layer_point_size.push_back(5);}
         double planar_thres = 0.01;
@@ -1472,9 +1479,17 @@ int main(int argc, char **argv) {
 
     nh.param<double>("small_room_mapping/voxel_size",small_room_voxel_size, 0.1);
     nh.param<double>("small_room_mapping/down_sample_size",small_room_downsample, 0.05);
+    nh.param<int>("small_room_mapping/small_room_max_layer",small_room_max_layer, 9);
+    nh.param<int>("small_room_mapping/small_room_max_layer_point_size",small_room_max_layer_point_size, 3);
+    nh.param<double>("small_room_mapping/small_room_planar_threshold",small_room_planar_threshold, 0.0001);
     
+
+
     LOG_S(WARNING) << "small room voxel size: " << small_room_voxel_size << std::endl;
     LOG_S(WARNING) << "small room downsample size: " << small_room_downsample << std::endl;
+    LOG_S(WARNING) << "small_room_max_layer:  " << small_room_max_layer << std::endl;
+    LOG_S(WARNING) << "small_room_max_layer_point_size:  " << small_room_max_layer_point_size << std::endl;
+    LOG_S(WARNING) << "small_room_planar_threshold:  " << small_room_planar_threshold << std::endl;
 
     // visualization params
     nh.param<bool>("publish/pub_voxel_map", publish_voxel_map, false);
