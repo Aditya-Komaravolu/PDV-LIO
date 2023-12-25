@@ -406,6 +406,7 @@ class OctoTree {
                     } else {
                         new_points_.push_back(pv);
                     }
+                    // std::cout << "New points number:" << new_points_num_ << std::endl;
                     if (new_points_num_ > update_size_threshold_) {
                         if (update_cov_enable_) {
                             init_plane(temp_points_, plane_ptr_);
@@ -871,10 +872,12 @@ void BuildResidualListOMP(const unordered_map<VOXEL_LOC, OctoTree *> &voxel_map,
                           const int max_layer,
                           const std::vector<pointWithCov> &pv_list,
                           std::vector<ptpl> &ptpl_list,
-                          std::vector<Eigen::Vector3d> &non_match) {
+                          std::vector<Eigen::Vector3d> &non_match, 
+                          pcl::VoxelGrid<pcl::PointXYZINormal> &downSizeFilterSurf) {
     double initial_voxel_size = voxel_size;
     int initial_max_layer = max_layer;
     bool retry = true;
+    auto current_leaf_size = downSizeFilterSurf.getLeafSize()[0];
 
     // std::mutex mylock;
     // ptpl_list.clear();
@@ -922,7 +925,9 @@ void BuildResidualListOMP(const unordered_map<VOXEL_LOC, OctoTree *> &voxel_map,
             bool is_sucess = false;
             double prob = 0;
             // 找到之后构建residual 返回值是single_ptpl 包含了与点匹配的平面的所有信息
-            build_single_residual(pv, current_octo, 0, initial_max_layer, sigma_num,
+            // build_single_residual(pv, current_octo, 0, initial_max_layer, sigma_num,
+            //                       is_sucess, prob, single_ptpl);
+            build_single_residual(pv, current_octo, 0, max_layer, sigma_num,
                                   is_sucess, prob, single_ptpl);
             // 如果不成功 根据当前点偏离voxel的程度 查找临近的voxel
             // HACK 这里是为了处理点落在两个voxel边界的情况 可能真实匹配的平面在临近的voxel中
@@ -950,8 +955,12 @@ void BuildResidualListOMP(const unordered_map<VOXEL_LOC, OctoTree *> &voxel_map,
                     near_position.z = near_position.z - 1;
                 }
                 auto iter_near = voxel_map.find(near_position);
+                // if (iter_near != voxel_map.end()) {
+                //     build_single_residual(pv, iter_near->second, 0, initial_max_layer, sigma_num,
+                //                           is_sucess, prob, single_ptpl);
+                // }
                 if (iter_near != voxel_map.end()) {
-                    build_single_residual(pv, iter_near->second, 0, initial_max_layer, sigma_num,
+                    build_single_residual(pv, iter_near->second, 0, max_layer, sigma_num,
                                           is_sucess, prob, single_ptpl);
                 }
             }
@@ -976,9 +985,12 @@ void BuildResidualListOMP(const unordered_map<VOXEL_LOC, OctoTree *> &voxel_map,
     }
     if (ptpl_list.empty() && std::abs(voxel_size - initial_voxel_size) < 1 && initial_max_layer < 9 ) {
             initial_voxel_size += 0.05;
+            current_leaf_size -= 0.01;
+            downSizeFilterSurf.setLeafSize(current_leaf_size, current_leaf_size, current_leaf_size);
             initial_max_layer +2;
-            std::cout << "Retrying with increased voxel size: " << initial_voxel_size << std::endl;
-            std::cout << "Retrying with increased octotree search: " << initial_max_layer << std::endl;
+            std::cout << endl << "Retrying with increased voxel size: " << initial_voxel_size << std::endl;
+            std::cout << endl << "Retrying with decreased down sample size: " << current_leaf_size << std::endl;
+            std::cout << endl << "Retrying with increased octotree search: " << initial_max_layer << std::endl;
     } else {
             retry = false; // Exit the retry loop if ptpl_list is not empty
             // break;

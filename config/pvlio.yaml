@@ -69,6 +69,10 @@ preprocess,:
     blind: 0.0
     point_filter_num: 1
 
+small_room_mapping:
+    down_sample_size: 0.08
+    voxel_size: 0.15
+
 mapping:
     down_sample_size: 0.1
     max_iteration: 20
@@ -80,8 +84,8 @@ mapping:
     # layer_point_size: [ 1, 2, 3, 3, 3, 4, 4, 4, 5]
     layer_point_size: [ 5, 5, 5, 5, 5]
     plannar_threshold: 0.01
-    max_points_size: 4000
-    max_cov_points_size: 4000
+    max_points_size: 1000
+    max_cov_points_size: 1000
     enable_small_rooms: true
 
     enable_coloring: true

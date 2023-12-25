@@ -243,6 +243,8 @@ int max_points_size = 50;
 double sigma_num = 2.0;
 double max_voxel_size = 1.0;
 double default_voxel_size = 1.0;
+double small_room_voxel_size = 0.1;
+double small_room_downsample = 0.05;
 
 std::vector<int> layer_size;
 
@@ -575,8 +577,12 @@ void publish_small_room_info(const std_msgs::String::ConstPtr& msg){
         for(int i=0; i <= new_max_layer; i++){ new_layer_point_size.push_back(3);}
         double planar_thres = 0.0001;
 
-        voxel_timestamp.data = 0.1;
-        down_sample_timestamp.data = 0.05;
+        // voxel_timestamp.data = 0.1;
+        // down_sample_timestamp.data = 0.05;
+
+        voxel_timestamp.data = small_room_voxel_size;
+        down_sample_timestamp.data = small_room_downsample;
+
 
         // max_voxel_size = 0.1;s
         // filter_size_surf_min = 0.05;
@@ -1209,7 +1215,7 @@ void observation_model_share(state_ikfom &s, esekfom::dyn_share_datastruct<doubl
     std::vector<ptpl> ptpl_list;
     std::vector<V3D> non_match_list;
     BuildResidualListOMP(voxel_map, max_voxel_size, 3.0, max_layer, pv_list,
-                         ptpl_list, non_match_list);
+                         ptpl_list, non_match_list, downSizeFilterSurf);
     double match_end = omp_get_wtime();
     // std::printf("Match Time: %f\n", match_end - match_start);
 
@@ -1460,6 +1466,15 @@ int main(int argc, char **argv) {
     nh.param<double>("noise_model/acc_cov", acc_cov, 0.1);
     nh.param<double>("noise_model/b_gyr_cov", b_gyr_cov, 0.0001);
     nh.param<double>("noise_model/b_acc_cov", b_acc_cov, 0.0001);
+
+
+    //small room params 
+
+    nh.param<double>("small_room_mapping/voxel_size",small_room_voxel_size, 0.1);
+    nh.param<double>("small_room_mapping/down_sample_size",small_room_downsample, 0.05);
+    
+    LOG_S(WARNING) << "small room voxel size: " << small_room_voxel_size << std::endl;
+    LOG_S(WARNING) << "small room downsample size: " << small_room_downsample << std::endl;
 
     // visualization params
     nh.param<bool>("publish/pub_voxel_map", publish_voxel_map, false);
