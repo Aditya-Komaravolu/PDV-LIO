@@ -63,30 +63,30 @@ camera:
     #                     0,          0,          0,          1]
 
 preprocess,:
-    lidar,_type: 1   ,             # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR,
+    lidar_type: 1         # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR,
     scan_line: 6
     scan_rate: 10
     blind: 0.0
     point_filter_num: 1
 
 small_room_mapping:
-    down_sample_size: 0.05
-    voxel_size: 0.1
+    down_sample_size: 0.03
+    voxel_size: 0.08
     small_room_max_layer: 9
-    small_room_max_layer_point_size: 5
-    small_room_planar_threshold: 0.001
+    small_room_max_layer_point_size: 3
+    small_room_planar_threshold: 0.0001
 
 mapping:
-    down_sample_size: 0.1
-    max_iteration: 20
-    voxel_size: 0.3
+    down_sample_size: 0.3
+    max_iteration: 15
+    voxel_size: 1.0
     # down_sample_size: 0.1
     # max_iteration: 4
     # voxel_size: 0.25
     max_layer: 4              # 4 layer, 0, 1, 2, 3
     # layer_point_size: [ 1, 2, 3, 3, 3, 4, 4, 4, 5]
-    layer_point_size: [ 5, 5, 5, 5, 5]
-    plannar_threshold: 0.01
+    layer_point_size: [7, 7, 7, 7, 7, 7, 7, 7]
+    plannar_threshold: 0.001
     max_points_size: 1000
     max_cov_points_size: 1000
     enable_small_rooms: true

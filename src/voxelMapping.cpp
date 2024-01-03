@@ -79,6 +79,7 @@
 #include "r3live_coloring.hpp"
 #include "services.hpp"
 #include "voxel_map_util.hpp"
+#include "NumCpp.hpp"
 
 #define INIT_TIME (0.1)
 #define LASER_POINT_COV (0.001)
@@ -106,8 +107,10 @@ double lidar_time_offset = 0.0;
 bool save_hba_pose_en = false;
 std::string save_base_path;
 double time_diff_lidar_to_imu = 0.0;
-
+double voxel_size_validator;
 bool enable_small_rooms;
+double new_min_eigen_value, new_max_layer;    
+
  
 string map_file_path, lid_topic, imu_topic, cam_topic, small_room_topic, pcd_save_path;
 double last_timestamp_lidar = 0, last_cam_timestamp = 0, last_timestamp_imu = -1.0, last_small_room_timestamp = 0;
@@ -135,6 +138,56 @@ bool lidar_pushed, flg_first_scan = true, flg_exit = false, flg_EKF_inited;
 bool scan_pub_en = false, dense_pub_en = false, scan_body_pub_en = false;
 bool kill_on_finish = false;
 
+// namespace thresholds{
+//     template <class ContainerAllocator>
+//     struct mapping_tweak_values_ { 
+//     typedef mapping_tweak_values_<ContainerAllocator> Type;
+
+
+//     mapping_tweak_values_()
+//     : header()
+//     , max_layer(0) 
+//     , plannar_threshold(0.0)
+//     , layer_point_size() {
+    
+//     }
+
+//     mapping_tweak_values_(const ContainerAllocator& _alloc)
+//     : header(_alloc)
+//     , max_layer(0)
+//     , plannar_threshold(0)
+//     , layer_point_size()  {
+//     (void)_alloc;
+//     }
+
+
+//     typedef  ::std_msgs::Header_<ContainerAllocator>  _header_type;
+//     _header_type header;
+
+//     typedef int max_layer_value;
+//     max_layer_value max_layer;
+
+//     typedef double plane_threshold;
+//     plane_threshold plannar_threshold;
+
+//     typedef vector<double> point_size_in_layers;
+//     point_size_in_layers layer_point_size;
+
+
+//     typedef boost::shared_ptr<thresholds::mapping_tweak_values_<ContainerAllocator> > Ptr;
+//     typedef boost::shared_ptr<thresholds::mapping_tweak_values_<ContainerAllocator> const> ConstPtr;
+
+//     };
+
+//     typedef thresholds::mapping_tweak_values_<std::allocator<void> > mapping_tweak_values;
+
+//     typedef boost::shared_ptr<thresholds::mapping_tweak_values > mapping_tweak_valuesPtr;
+//     typedef boost::shared_ptr<thresholds::mapping_tweak_values const> mapping_tweak_valuesConstPtr;
+
+
+// }
+
+
 namespace thresholds{
     template <class ContainerAllocator>
     struct mapping_tweak_values_ { 
@@ -145,7 +198,9 @@ namespace thresholds{
     : header()
     , max_layer(0) 
     , plannar_threshold(0.0)
-    , layer_point_size() {
+    , layer_point_size()
+    , voxel_size(0.0)
+    , filter_surface_ratio(0.0) {
     
     }
 
@@ -153,7 +208,9 @@ namespace thresholds{
     : header(_alloc)
     , max_layer(0)
     , plannar_threshold(0)
-    , layer_point_size()  {
+    , voxel_size(0.0)
+    , filter_surface_ratio(0.0)
+    , layer_point_size() {
     (void)_alloc;
     }
 
@@ -169,6 +226,11 @@ namespace thresholds{
 
     typedef vector<double> point_size_in_layers;
     point_size_in_layers layer_point_size;
+
+    typedef double maximum_voxel_size;
+    maximum_voxel_size voxel_size;
+
+    double filter_surface_ratio;
 
 
     typedef boost::shared_ptr<thresholds::mapping_tweak_values_<ContainerAllocator> > Ptr;
@@ -208,8 +270,7 @@ std::deque<pv_lio::Float32Stamped::ConstPtr> down_sample_buffer;
 // std::deque<mapping_tweak_values> con;
 std::deque<thresholds::mapping_tweak_values::ConstPtr> threshold_values_buffer;
 std::deque<double> small_room_timestamps;
-std::deque<std_msgs::String::ConstPtr> small_room_msgs;
-
+std::deque<pv_lio::Float32Stamped::ConstPtr> small_room_msgs;
 
 PointCloudXYZINormal::Ptr featsFromMap(new PointCloudXYZINormal());
 PointCloudXYZINormal::Ptr feats_undistort(new PointCloudXYZINormal());
@@ -250,6 +311,8 @@ int small_room_max_layer;
 int small_room_max_layer_point_size;
 double small_room_planar_threshold;
 
+double default_min_eigen_value, default_max_layer;
+std::vector<double> default_layer_point_size;
 
 std::vector<int> layer_size;
 
@@ -351,6 +414,9 @@ void RGBpointBodyToWorld(pcl::PointXYZINormal const *const pi, pcl::PointXYZINor
     po->y = p_global(1);
     po->z = p_global(2);
     po->intensity = pi->intensity;
+
+    // std::cout << endl << "X: " << po->x << "Y: " << po->y << "Z: " << po->z << "Intensity: " << po->intensity << endl;
+
 }
 
 // void RGBpointBodyToWorld(pcl::PointXYZRGBINormal const *const pi, pcl::PointXYZRGBINormal *const po) {
@@ -512,24 +578,20 @@ void set_voxel_size_cbk(const pv_lio::Float32Stamped::ConstPtr &msg) {
     LOG_S(INFO) << "got set_voxel_size message " << msg->data << " timestamp: " << msg->header.stamp.toSec() << std::endl;
 }
 
+// Function for the capped log curve
+double cappedLogCurve(nc::NdArray<double> x, double a = 1, double b = 8) {
+    return 0.1 + 0.9 / (1 + nc::exp(-a * (x[0] - b)));
+}
+
 
 
 void publish_small_room_info(const std_msgs::String::ConstPtr& msg){
 
-    // ROS_INFO("current env location:");
-    // std::cout <<  msg->data.c_str() << std::endl;
+
     mtx_buffer.lock();
-    LOG_S(INFO) << "current env location: " << msg->data <<  std::endl;
+    // LOG_S(INFO) << "current env location: " << msg->data <<  std::endl;
     std::string data = msg->data;
-    double timestamp_tolerance = 0.2;
-
-
-    // std::cout << "1:" <<  data.substr(data.find(":"), data.find(",")) << endl;
-    // std::cout << "2:" <<  data.substr(data.find(":", data.find(":"))+1, data.find(",")) << endl; 
-    // std::cout << "3:" <<  data.substr(data.find("secs:")+5, data.find(",",data.find("secs:")+5) - (data.find("secs:")+5)) << endl; 
-    // std::cout << "4:" <<  data.substr(data.find_first_of("secs:")+5, data.find(",")-1) << endl; 
-    // std::cout << "5:" <<  data.substr(data.find_first_of("secs:")+5, data.find_last_of(",")-1) << endl; 
-
+    // double timestamp_tolerance = 0.2;
 
     
     std::string secsSubstring = data.substr(data.find("secs:")+5, data.find(",",data.find("secs:")+5) - (data.find("secs:")+5));
@@ -543,188 +605,170 @@ void publish_small_room_info(const std_msgs::String::ConstPtr& msg){
     ros::Time ros_timestamp;
     ros_timestamp.fromSec(current_timestamp);
      
-    // std::cout << "Current lidar endtime: " << Measures.lidar_beg_time << endl;
-    // std::cout << "Difference in  lidar timestamp and small room timestamp: " << last_timestamp_lidar  - current_timestamp << endl;
-
-    pv_lio::Float32Stamped voxel_timestamp, down_sample_timestamp;
+    // pv_lio::Float32Stamped voxel_timestamp, down_sample_timestamp;
 
     thresholds::mapping_tweak_values thres_ptr;
 
 
-    voxel_timestamp.header.stamp = ros_timestamp;
-    down_sample_timestamp.header.stamp = ros_timestamp;
-  
-    // timestamp.data = 0.1;
+    // voxel_timestamp.header.stamp = ros_timestamp;
+    // down_sample_timestamp.header.stamp = ros_timestamp;     
 
-    // last_small_room_timestamp = current_timestamp;
+    // std::string small_str = "Small";
+    // std::string large_str = "Large";
 
-    // while (last_timestamp_lidar -  current_timestamp){
-    
-    
-    // std::cout << "Difference in  lidar timestamp and small room timestamp: " << last_timestamp_lidar  - current_timestamp << endl;
+    // std::cout<< "test:" << data.substr(data.find("In")+3, data.find("Room")-4) << endl;
 
-    // if (!time_sync_en && abs(last_small_room_timestamp - last_timestamp_lidar) < timestamp_tolerance && !lidar_buffer.empty()) {
-
-        // if (std::abs(last_timestamp_lidar - current_timestamp) < timestamp_tolerance){
-            // std::cout << "EQUAL!!" << endl;        
-
-    std::string small_str = "Small";
-    std::string large_str = "Large";
-
-    std::cout<< "test:" << data.substr(data.find("In")+3, data.find("Room")-4) << endl;
-
-    if (small_str == data.substr(data.find("In")+3, data.find("Room")-4)) {
+    // if (small_str == data.substr(data.find("In")+3, data.find("Room")-4)) {
         
-        LOG_S(INFO) << "Entered small room. Setting VOXEL SIZE: 0.1 , DOWN SAMPLE: 0.05 " << std::endl;
+    //     LOG_S(INFO) << "Entered small room. Setting VOXEL SIZE: 0.1 , DOWN SAMPLE: 0.05 " << std::endl;
         
-        int new_max_layer = small_room_max_layer;
-        vector<double> new_layer_point_size;
-        for(int i=0; i <= new_max_layer; i++){ new_layer_point_size.push_back(small_room_max_layer_point_size);}
-        // double planar_thres = 0.001;
-        double planar_thres = small_room_planar_threshold;
+    //     int new_max_layer = small_room_max_layer;
+    //     vector<double> new_layer_point_size;
+    //     for(int i=0; i <= new_max_layer; i++){ new_layer_point_size.push_back(small_room_max_layer_point_size);}
+    //     double planar_thres = small_room_planar_threshold;
 
 
-        // voxel_timestamp.data = 0.1;
-        // down_sample_timestamp.data = 0.05;
-
-        voxel_timestamp.data = small_room_voxel_size;
-        down_sample_timestamp.data = small_room_downsample;
+    //     voxel_timestamp.data = small_room_voxel_size;
+    //     down_sample_timestamp.data = small_room_downsample;
 
 
-        // max_voxel_size = 0.1;s
-        // filter_size_surf_min = 0.05;
-        pv_lio::Float32Stamped::ConstPtr voxel_ptr_timestamp = boost::make_shared<pv_lio::Float32Stamped>(voxel_timestamp);
-        voxel_size_buffer.push_back(voxel_ptr_timestamp);
+    //     pv_lio::Float32Stamped::ConstPtr voxel_ptr_timestamp = boost::make_shared<pv_lio::Float32Stamped>(voxel_timestamp);
+    //     voxel_size_buffer.push_back(voxel_ptr_timestamp);
 
-        pv_lio::Float32Stamped::ConstPtr down_sample_ptr_timestamp = boost::make_shared<pv_lio::Float32Stamped>(down_sample_timestamp);
-        down_sample_buffer.push_back(down_sample_ptr_timestamp);
+    //     pv_lio::Float32Stamped::ConstPtr down_sample_ptr_timestamp = boost::make_shared<pv_lio::Float32Stamped>(down_sample_timestamp);
+    //     down_sample_buffer.push_back(down_sample_ptr_timestamp);
 
-        thres_ptr.header.stamp = ros_timestamp;
-        thres_ptr.max_layer = new_max_layer;
-        thres_ptr.plannar_threshold = planar_thres;
+    //     thres_ptr.header.stamp = ros_timestamp;
+    //     thres_ptr.max_layer = new_max_layer;
+    //     thres_ptr.plannar_threshold = planar_thres;
 
-        thres_ptr.layer_point_size = new_layer_point_size;
+    //     thres_ptr.layer_point_size = new_layer_point_size;
 
-        thresholds::mapping_tweak_values::ConstPtr push_thres = boost::make_shared<thresholds::mapping_tweak_values>(thres_ptr);
+    //     thresholds::mapping_tweak_values::ConstPtr push_thres = boost::make_shared<thresholds::mapping_tweak_values>(thres_ptr);
 
-        threshold_values_buffer.push_back(push_thres);
+    //     threshold_values_buffer.push_back(push_thres);
 
-        std::cout<< "******************************"<< endl;
-        std::cout << "THRESHOLD UPDATED PARAMS" << endl;
-        std::cout << "******************************"<< endl;
-        std::cout<< "Timestamp: " << ros_timestamp << endl;
-        std::cout<< "Max layer: " << new_max_layer << endl;
-        std::cout<< "Layer Point Size: [";
-        for (const auto& value : new_layer_point_size) {
-                std::cout << value << " ,";
-            }
-        std::cout << " ]" << endl;
-        std::cout<< "Planar Threshold: " << planar_thres << endl;
-        std::cout<< "******************************"<< endl;
+    //     std::cout<< "******************************"<< endl;
+    //     std::cout << "THRESHOLD UPDATED PARAMS" << endl;
+    //     std::cout << "******************************"<< endl;
+    //     std::cout<< "Timestamp: " << ros_timestamp << endl;
+    //     std::cout<< "Max layer: " << new_max_layer << endl;
+    //     std::cout<< "Layer Point Size: [";
+    //     for (const auto& value : new_layer_point_size) {
+    //             std::cout << value << " ,";
+    //         }
+    //     std::cout << " ]" << endl;
+    //     std::cout<< "Planar Threshold: " << planar_thres << endl;
+    //     std::cout<< "******************************"<< endl;
 
 
 
 
-    } 
-    else if (large_str == data.substr(data.find("In")+3, data.find("Area")-4)) {
-        LOG_S(INFO) << "Entered Large Room. Setting VOXEL SIZE: " << default_voxel_size << ", DOWN SAMPLE: " << filter_size_surf_min_default << std::endl;
-        voxel_timestamp.data = default_voxel_size;
-        down_sample_timestamp.data = filter_size_surf_min_default;
-        // max_voxel_size = default_voxel_size;
-        // filter_size_surf_min = filter_size_surf_min_default;
-        pv_lio::Float32Stamped::ConstPtr voxel_ptr_timestamp = boost::make_shared<pv_lio::Float32Stamped>(voxel_timestamp);
-        voxel_size_buffer.push_back(voxel_ptr_timestamp);
+    // } 
+    // else if (large_str == data.substr(data.find("In")+3, data.find("Area")-4)) {
+    //     LOG_S(INFO) << "Entered Large Room. Setting VOXEL SIZE: " << default_voxel_size << ", DOWN SAMPLE: " << filter_size_surf_min_default << std::endl;
+    //     voxel_timestamp.data = default_voxel_size;
+    //     down_sample_timestamp.data = filter_size_surf_min_default;
+    //     // max_voxel_size = default_voxel_size;
+    //     // filter_size_surf_min = filter_size_surf_min_default;
+    //     pv_lio::Float32Stamped::ConstPtr voxel_ptr_timestamp = boost::make_shared<pv_lio::Float32Stamped>(voxel_timestamp);
+    //     voxel_size_buffer.push_back(voxel_ptr_timestamp);
 
-        pv_lio::Float32Stamped::ConstPtr down_sample_ptr_timestamp = boost::make_shared<pv_lio::Float32Stamped>(down_sample_timestamp);
-        down_sample_buffer.push_back(down_sample_ptr_timestamp);
+    //     pv_lio::Float32Stamped::ConstPtr down_sample_ptr_timestamp = boost::make_shared<pv_lio::Float32Stamped>(down_sample_timestamp);
+    //     down_sample_buffer.push_back(down_sample_ptr_timestamp);
 
-        int new_max_layer = max_layer;
-        vector<double> new_layer_point_size;
-        for(int i=0; i <= new_max_layer; i++){ new_layer_point_size.push_back(5);}
-        double planar_thres = 0.01;
+    //     int new_max_layer = max_layer;
+    //     auto new_layer_point_size = layer_point_size;
+    //     double planar_thres = 0.01;
 
-        thres_ptr.header.stamp = ros_timestamp;
-        thres_ptr.max_layer = new_max_layer;
-        thres_ptr.plannar_threshold = planar_thres;
+    //     thres_ptr.header.stamp = ros_timestamp;
+    //     thres_ptr.max_layer = new_max_layer;
+    //     thres_ptr.plannar_threshold = planar_thres;
 
-        thres_ptr.layer_point_size = new_layer_point_size;
+    //     thres_ptr.layer_point_size = new_layer_point_size;
 
-        thresholds::mapping_tweak_values::ConstPtr push_thres = boost::make_shared<thresholds::mapping_tweak_values>(thres_ptr);
+    //     thresholds::mapping_tweak_values::ConstPtr push_thres = boost::make_shared<thresholds::mapping_tweak_values>(thres_ptr);
 
-        threshold_values_buffer.push_back(push_thres);
+    //     threshold_values_buffer.push_back(push_thres);
 
-        std::cout<< "******************************"<< endl;
-        std::cout << "THRESHOLD UPDATED PARAMS" << endl;
-        std::cout << "******************************"<< endl;
-        std::cout<< "Timestamp: " << ros_timestamp << endl;
-        std::cout<< "Max layer: " << new_max_layer << endl;
-        std::cout<< "Layer Point Size: [";
-        for (const auto& value : new_layer_point_size) {
-                std::cout << value << " ,";
-            }
-        std::cout << " ]" << endl;
-        std::cout<< "Planar Threshold: " << planar_thres << endl;
-        std::cout<< "******************************"<< endl;
+    //     std::cout<< "******************************"<< endl;
+    //     std::cout << "THRESHOLD UPDATED PARAMS" << endl;
+    //     std::cout << "******************************"<< endl;
+    //     std::cout<< "Timestamp: " << ros_timestamp << endl;
+    //     std::cout<< "Max layer: " << new_max_layer << endl;
+    //     std::cout<< "Layer Point Size: [";
+    //     for (const auto& value : new_layer_point_size) {
+    //             std::cout << value << " ,";
+    //         }
+    //     std::cout << " ]" << endl;
+    //     std::cout<< "Planar Threshold: " << planar_thres << endl;
+    //     std::cout<< "******************************"<< endl;
 
-        }
-    else {
-        ROS_WARN("Room not specified! Msg DOESNT contain (Small/Large)");
+    //     }
+    // else {
+    //     ROS_WARN("Room not specified! Msg DOESNT contain (Small/Large)");
 
-    }
-
-            // break;
-        // }
     // }
-    // else{
-    //     ROS_WARN("Lidar Last time is greater than Small room first timestamp");
-    //     small_room_timestamps.clear();
-    // }
-    // small_room_timestamps.push_back(current_timestamp);
-    // small_room_msgs.push_back(msg);
+
+    // auto current_lidar_frame = feats_down_body;
+
+    // std::vector<double> 
+
+    
+    pv_lio::Float32Stamped temp;
+
+    temp.header.stamp = ros_timestamp;
+    temp.data = 0;
+    
+    pv_lio::Float32Stamped::ConstPtr const_temp = boost::make_shared<pv_lio::Float32Stamped>(temp);
+
+    small_room_msgs.push_back(const_temp);
+
     mtx_buffer.unlock();
     sig_buffer.notify_all();
 
+
 }
 
-void set_dynamic_voxelization_params_cbk(const livox_ros_driver::CustomMsg::ConstPtr &msg){
+// void set_dynamic_voxelization_params_cbk(const livox_ros_driver::CustomMsg::ConstPtr &msg){
 
     
-    if (!small_room_timestamps.empty() || !time_buffer.empty()){
+//     if (!small_room_timestamps.empty() || !time_buffer.empty()){
 
-        double last_recorded_timestamp = small_room_timestamps.front();
-        std::string msg_data = small_room_msgs.front()->data;
-        double lidar_timestamp = msg->header.stamp.toSec();
-        std::cout << "Small room timestamp: " << last_recorded_timestamp << " Lidar Timestamp: " << last_timestamp_lidar << std::endl;
-        std::cout << "Difference in lidar timestamp and small room timestamp: " << last_timestamp_lidar - last_recorded_timestamp << endl;
+//         double last_recorded_timestamp = small_room_timestamps.front();
+//         std::string msg_data = small_room_msgs.front()->data;
+//         double lidar_timestamp = msg->header.stamp.toSec();
+//         std::cout << "Small room timestamp: " << last_recorded_timestamp << " Lidar Timestamp: " << last_timestamp_lidar << std::endl;
+//         std::cout << "Difference in lidar timestamp and small room timestamp: " << last_timestamp_lidar - last_recorded_timestamp << endl;
 
         
 
-        // while (!){
+//         // while (!){
 
-        // while(last_recorded_timestamp > last_timestamp_lidar);
+//         // while(last_recorded_timestamp > last_timestamp_lidar);
 
-        if (last_recorded_timestamp == last_timestamp_lidar){        
-            if (msg_data.find("Small Room") != std::string::npos) {
-                LOG_S(INFO) << "Entered small room. Setting VOXEL SIZE: 0.1 , DOWN SAMPLE: 0.05 " << std::endl;
-                max_voxel_size = 0.1;
-                filter_size_surf_min = 0.03;
+//         if (last_recorded_timestamp == last_timestamp_lidar){        
+//             if (msg_data.find("Small Room") != std::string::npos) {
+//                 LOG_S(INFO) << "Entered small room. Setting VOXEL SIZE: 0.1 , DOWN SAMPLE: 0.05 " << std::endl;
+//                 max_voxel_size = 0.1;
+//                 filter_size_surf_min = 0.03;
 
-            } 
-            else if (msg_data.find("Large Room") != std::string::npos) {
-                LOG_S(INFO) << "Entered Large Room. Setting VOXEL SIZE: " << default_voxel_size << ", DOWN SAMPLE: " << filter_size_surf_min_default << std::endl;
-                max_voxel_size = default_voxel_size;
-                filter_size_surf_min = filter_size_surf_min_default;
-            }
-            //     break;
-            // }
+//             } 
+//             else if (msg_data.find("Large Room") != std::string::npos) {
+//                 LOG_S(INFO) << "Entered Large Room. Setting VOXEL SIZE: " << default_voxel_size << ", DOWN SAMPLE: " << filter_size_surf_min_default << std::endl;
+//                 max_voxel_size = default_voxel_size;
+//                 filter_size_surf_min = filter_size_surf_min_default;
+//             }
+//             //     break;
+//             // }
 
-            small_room_timestamps.pop_front();
-            small_room_msgs.pop_front();
+//             small_room_timestamps.pop_front();
+//             small_room_msgs.pop_front();
 
-        }
-    }
+//         }
+//     }
 
-}
+// }
 
 double lidar_mean_scantime = 0.0;
 int scan_num = 0;
@@ -785,48 +829,174 @@ std::tuple<bool, bool> sync_packages(MeasureGroup &meas) {
     }
 
     // set voxel size if current timestamp > voxel message timestamp
-    if (!voxel_size_buffer.empty() && !threshold_values_buffer.empty()) {
-        auto front = voxel_size_buffer.front();
+    // if (!voxel_size_buffer.empty() && !threshold_values_buffer.empty()) {
+    //     auto front = voxel_size_buffer.front();
 
-        auto first_thres_values = threshold_values_buffer.front();
+    //     auto first_thres_values = threshold_values_buffer.front();
 
-        auto new_downsample_value = down_sample_buffer.front();
+    //     auto new_downsample_value = down_sample_buffer.front();
         
-        // LOG_S(INFO) << "front voxel timestamp " << front->header.stamp.toSec() << ", lidar last timestamp: " << last_timestamp_lidar << std::endl;
+    //     // LOG_S(INFO) << "front voxel timestamp " << front->header.stamp.toSec() << ", lidar last timestamp: " << last_timestamp_lidar << std::endl;
 
-        if (lidar_end_time > front->header.stamp.toSec() && lidar_end_time > first_thres_values->header.stamp.toSec() && lidar_end_time > new_downsample_value->header.stamp.toSec()) {
-            if (common::debug_small_rooms){
+    //     if (lidar_end_time > front->header.stamp.toSec() && lidar_end_time > first_thres_values->header.stamp.toSec() && lidar_end_time > new_downsample_value->header.stamp.toSec()) {
+    //         if (common::debug_small_rooms){
 
-                std::cout << endl << "\033[1;32msetting max_voxel_size to: \033[0m" << front->data << "\033[1;32m set voxel timestamp: \033[0m" << front->header.stamp.toSec() << "\033[1;32m lidar last timestamp: \033[0m" << last_timestamp_lidar << std::endl;
-                std::cout << endl << "\033[1;32msetting down_sample ratio to: \033[0m" << new_downsample_value->data << "\033[1;32m set downsample ratio timestamp: \033[0m" << new_downsample_value->header.stamp.toSec() << "\033[1;32m lidar last timestamp: \033[0m" << last_timestamp_lidar << std::endl;
+    //             std::cout << endl << "\033[1;32msetting max_voxel_size to: \033[0m" << front->data << "\033[1;32m set voxel timestamp: \033[0m" << front->header.stamp.toSec() << "\033[1;32m lidar last timestamp: \033[0m" << last_timestamp_lidar << std::endl;
+    //             std::cout << endl << "\033[1;32msetting down_sample ratio to: \033[0m" << new_downsample_value->data << "\033[1;32m set downsample ratio timestamp: \033[0m" << new_downsample_value->header.stamp.toSec() << "\033[1;32m lidar last timestamp: \033[0m" << last_timestamp_lidar << std::endl;
 
-            }
-            max_voxel_size = front->data;
-            voxel_size_buffer.pop_front();
-            max_layer = first_thres_values->max_layer;
-            min_eigen_value = first_thres_values->plannar_threshold;
-            layer_point_size = first_thres_values->layer_point_size;
-            downSizeFilterSurf.setLeafSize(new_downsample_value->data, new_downsample_value->data, new_downsample_value->data);
-            threshold_values_buffer.pop_front();
-            down_sample_buffer.pop_front();
+    //         }
+    //         max_voxel_size = front->data;
+    //         voxel_size_buffer.pop_front();
+    //         max_layer = first_thres_values->max_layer;
+    //         min_eigen_value = first_thres_values->plannar_threshold;
+    //         layer_point_size = first_thres_values->layer_point_size;
+    //         downSizeFilterSurf.setLeafSize(new_downsample_value->data, new_downsample_value->data, new_downsample_value->data);
+    //         threshold_values_buffer.pop_front();
+    //         down_sample_buffer.pop_front();
             
 
 
-            std::cout << " " << endl;
-            std::cout<< "\033[1;32m******************************\033[0m" << endl;
-            std::cout << "\033[1;32mTHRESHOLD UPDATED at lidar time: \033[0m" << lidar_end_time << endl;
-            std::cout << "\033[1;32m******************************\033[0m" << endl;
-            std::cout<< "\033[1;32mTimestamp: \033[0m" << first_thres_values->header.stamp.toSec() << endl;
-            std::cout<< "\033[1;32mMax layer: \033[0m" << max_layer << endl;
-            std::cout<< "\033[1;32mLayer Point Size: [\033[0m";
-            for (const auto& value : layer_point_size) {
-                    std::cout << value << "\033[1;32m ,\033[0m";
+    //         std::cout << " " << endl;
+    //         std::cout<< "\033[1;32m******************************\033[0m" << endl;
+    //         std::cout << "\033[1;32mTHRESHOLD UPDATED at lidar time: \033[0m" << lidar_end_time << endl;
+    //         std::cout << "\033[1;32m******************************\033[0m" << endl;
+    //         std::cout<< "\033[1;32mTimestamp: \033[0m" << first_thres_values->header.stamp.toSec() << endl;
+    //         std::cout<< "\033[1;32mMax layer: \033[0m" << max_layer << endl;
+    //         std::cout<< "\033[1;32mLayer Point Size: [\033[0m";
+    //         for (const auto& value : layer_point_size) {
+    //                 std::cout << value << "\033[1;32m ,\033[0m";
+    //             }
+    //         std::cout << "\033[1;32m ]\033[0m" << endl;
+    //         std::cout<< "\033[1;32mPlanar Threshold: \033[0m" << min_eigen_value << endl;
+    //         std::cout<< "\033[1;32m******************************\033[0m" << endl;
+
+    //     }
+    // }
+
+
+    if (!small_room_msgs.empty()) {
+
+        auto change_vals_timestamp = small_room_msgs.front();
+        
+        if (lidar_end_time > change_vals_timestamp->header.stamp.toSec()){
+
+            std::vector<std::vector<double>> lidar_points;
+
+            // auto current_lidar_frame = lidar_buffer.front();
+
+            // for(size_t i = 0; i < current_lidar_frame->size(); i++ ){
+            //     lidar_points.push_back({current_lidar_frame->points[i].x, current_lidar_frame->points[i].y, current_lidar_frame->points[i].z});
+            // }
+
+            auto lidar_frame = lidar_buffer.front();
+            for(size_t i = 0; i < lidar_frame->size(); i++ ){
+                double x = lidar_frame->points[i].x;
+                double y = lidar_frame->points[i].y;
+                double z = lidar_frame->points[i].z;
+                lidar_points.push_back({x, y, z});
+            }
+
+            auto np_points = nc::asarray(lidar_points);
+
+            auto mean = nc::mean(np_points, nc::Axis::ROW);
+
+            auto differences = np_points - mean;
+
+            // # Calculate Euclidean distances
+            auto distances = nc::norm(differences, nc::Axis::COL);
+
+
+            auto percentile_90 = nc::percentile(distances, 90);
+            
+            double voxel_size = cappedLogCurve(percentile_90);
+            std::cout << "Predicted value for " << percentile_90 << " is: " << cappedLogCurve(percentile_90) << std::endl;
+
+            double new_downsample_size = voxel_size/4;
+
+
+            if (voxel_size < 0.5){
+                
+                if (std::abs(voxel_size_validator-voxel_size) >0.1) {
+        
+                    voxel_size_validator = voxel_size;                
+                    max_voxel_size = voxel_size;
+                        
+                    new_min_eigen_value = default_min_eigen_value;
+                    new_max_layer = default_max_layer;
+                    auto current_layer_point_size = default_layer_point_size;    
+                    
+                    // if (new_downsample_size <= 0.05{}
+                    if (voxel_size <=0.15) {
+                        new_downsample_size=0.05;
+                        new_min_eigen_value = 0.0001;
+                        new_max_layer = 9;
+                        vector<double> new_layer_point_size;
+                        for(int i=0; i <= new_max_layer; i++){ new_layer_point_size.push_back(3);}
+                        current_layer_point_size = new_layer_point_size;
+
+                    }
+                    min_eigen_value = new_min_eigen_value;
+                    max_layer = new_max_layer;
+                    layer_point_size = current_layer_point_size;
+                    downSizeFilterSurf.setLeafSize(new_downsample_size, new_downsample_size, new_downsample_size);
+
+
+                    std::cout << "\n \033[1;32mChanged voxel size to : \033[0m" << voxel_size << endl;
+                    std::cout << "\n \033[1;32mChanged downsample size to : \033[0m" << new_downsample_size << endl; 
+                    std::cout << "\n \033[1;32mChanged planar thres to : \033[0m" << min_eigen_value << endl; 
+                    std::cout << "\n \033[1;32mChanged max layer to : \033[0m" << max_layer << endl; 
+                    std::cout<< "\n \033[1;32mLayer Point Size: [";
+                    for (const auto& value : layer_point_size) {
+                            std::cout << value << " ,";
+                    }
+                    std::cout << " ]\033[0m" << endl;
+
                 }
-            std::cout << "\033[1;32m ]\033[0m" << endl;
-            std::cout<< "\033[1;32mPlanar Threshold: \033[0m" << min_eigen_value << endl;
-            std::cout<< "\033[1;32m******************************\033[0m" << endl;
+            }
+            else{
+                if (std::abs(voxel_size_validator-voxel_size) >0.3) {
+        
+                    voxel_size_validator = voxel_size;                
+                    max_voxel_size = voxel_size;
+                        
+                    // if (new_downsample_size <= 0.05{}
+                    // new_downsample_size=0.05;
+                    min_eigen_value = default_min_eigen_value;
+                    max_layer = default_max_layer;
+                    // vector<double> new_layer_point_size;
+                    // for(int i=0; i <= max_layer; i++){ new_layer_point_size.push_back(5);}
+                    layer_point_size = default_layer_point_size;
+
+
+                    downSizeFilterSurf.setLeafSize(filter_size_surf_min_default, filter_size_surf_min_default, filter_size_surf_min_default);
+
+
+                    std::cout << "\n \033[1;32mChanged voxel size to : \033[0m" << voxel_size << endl;
+                    std::cout << "\n \033[1;32mChanged downsample size to : \033[0m" << filter_size_surf_min_default << endl; 
+                    std::cout << "\n \033[1;32mChanged planar thres to : \033[0m" << min_eigen_value << endl; 
+                    std::cout << "\n \033[1;32mChanged max layer to : \033[0m" << max_layer << endl; 
+                    std::cout<< "\n \033[1;32mLayer Point Size: [";
+                    for (const auto& value : layer_point_size) {
+                            std::cout << value << " ,";
+                    }
+                    std::cout << " ]\033[0m" << endl;
+                }
+                
+            }
+
+            small_room_msgs.pop_front(); 
 
         }
+        // thres_ptr.header.stamp = ros_timestamp;
+        // thres_ptr.max_layer = max_layer;
+        // thres_ptr.plannar_threshold = min_eigen_value;
+        // thres_ptr.layer_point_size = layer_point_size;
+        // thres_ptr.filter_surface_ratio = new_downsample_size;
+        // thres_ptr.voxel_size = voxel_size;
+
+        // thresholds::mapping_tweak_values::ConstPtr push_thres = boost::make_shared<thresholds::mapping_tweak_values>(thres_ptr);
+
+        // threshold_values_buffer.push_back(push_thres)
     }
 
     if (last_timestamp_imu < lidar_end_time) {
@@ -902,8 +1072,10 @@ void publish_frame_world(const ros::Publisher &pubLaserCloudFull) {
         PointCloudXYZINormal::Ptr laserCloudFullRes(dense_pub_en ? feats_undistort : feats_down_body);
         int size = laserCloudFullRes->points.size();
         PointCloudXYZINormal laserCloudWorld;
+        // double average_intensity = 0;
         for (int i = 0; i < size; i++) {
             pcl::PointXYZINormal const *const p = &laserCloudFullRes->points[i];
+            // average_intensity+= p->intensity;
             if (p->intensity < 5) {
                 continue;
             }
@@ -922,6 +1094,9 @@ void publish_frame_world(const ros::Publisher &pubLaserCloudFull) {
             //            RGBpointBodyToWorld(&laserCloudFullRes->points[i], \
 //                                &laserCloudWorld->points[i]);
         }
+        // average_intensity /= size;
+
+        // std::cout << endl << "Average intensity for current frame: " << average_intensity << endl;
 
         sensor_msgs::PointCloud2 laserCloudmsg;
         pcl::toROSMsg(laserCloudWorld, laserCloudmsg);
@@ -1410,6 +1585,136 @@ bool save_lio_cloud_svc_cbk(std_srvs::Trigger::Request &req, std_srvs::Trigger::
     return true;
 }
 
+std::vector<double> calculateMean(std::vector<std::vector<double>> points) {
+    std::vector<double> mean(points[0].size(), 0.0);
+
+    for (auto point : points) {
+        for (std::size_t i = 0; i < point.size(); ++i) {
+            mean[i] += point[i];
+        }
+    }
+
+    for (double val : mean) {
+        val /= points.size();
+    }
+
+    return mean;
+}
+
+// Function to calculate the Euclidean distances
+std::vector<double> calculateDistances(const std::vector<std::vector<double>>& points, const std::vector<double>& mean) {
+    std::vector<double> distances;
+
+    for (const auto& point : points) {
+        double distance = 0.0;
+        for (std::size_t i = 0; i < point.size(); ++i) {
+            distance += std::pow(point[i] - mean[i], 2);
+        }
+        distances.push_back(std::sqrt(distance));
+    }
+
+    return distances;
+}
+
+
+bool save_points_to_csv_cbk(std_srvs::Trigger::Request &req, std_srvs::Trigger::Response &res){
+    try {
+
+        auto current_lidar_frame = feats_down_body;
+        std::ofstream outputFile(root_dir+"/output.csv");
+        // Write variable names as header
+        // outputFile << "frame;avr_intensity;intensity_values;voxel_size" << std::endl;
+        outputFile << "x,y,z" << std::endl;    
+
+        for (size_t i = 0; i < feats_down_body->size(); i++) {
+                outputFile << feats_down_body->points[i].x << "," << feats_down_body->points[i].y << "," << feats_down_body->points[i].z << endl ;
+        }
+
+        res.message = "Frame points saved successfully! at: " + root_dir+"/output.csv"; 
+
+
+        Eigen::MatrixXd all_points(feats_down_body->size(), 3);
+
+        // Collect all points
+        for (size_t i = 0; i < feats_down_body->size(); i++) {
+            all_points.row(i) << feats_down_body->points[i].x, feats_down_body->points[i].y, feats_down_body->points[i].z;
+        }
+
+        // Calculate the covariance matrix for all points
+        Eigen::MatrixXd covariance_matrix = Eigen::MatrixXd::Zero(3, 3);
+        for (size_t i = 0; i < feats_down_body->size(); i++) {
+            covariance_matrix += (all_points.row(i).transpose() * all_points.row(i)) / feats_down_body->size();
+        }
+
+        // Print the covariance matrix
+        std::cout << "Covariance matrix for all points:" << std::endl;
+        std::cout << covariance_matrix << std::endl;
+
+
+
+        std::vector<std::vector<double>> points;
+
+        for(size_t i = 0; i < feats_down_body->size(); i++ ){
+            points.push_back({feats_down_body->points[i].x, feats_down_body->points[i].y, feats_down_body->points[i].z});
+        }
+
+        auto np_points = nc::asarray(points);
+
+        auto mean = nc::mean(np_points, nc::Axis::ROW);
+
+        auto differences = np_points - mean;
+
+        // # Calculate Euclidean distances
+        auto distances = nc::norm(differences, nc::Axis::COL);
+
+
+        auto percentile_90 = nc::percentile(distances, 90);
+        
+        std::cout << "Predicted value for " << percentile_90 << " is: " << cappedLogCurve(percentile_90) << std::endl;
+
+        
+
+        // // Sample points
+        // // std::vector<std::vector<double>> points = {{/* x1, y1, z1 */}, {/* x2, y2, z2 */}, {/* x3, y3, z3 */}, {/* ... */}};
+
+        // // Calculate mean
+        // std::vector<double> mean = calculateMean(points);
+
+        // std::cout << "Calculated mean" << endl;
+
+
+        // // Calculate differences
+        // std::vector<std::vector<double>> differences(points.size(), std::vector<double>(points[0].size()));
+        // for (std::size_t i = 0; i < points.size(); ++i) {
+        //     for (std::size_t j = 0; j < points[0].size(); ++j) {
+        //         differences[i][j] = points[i][j] - mean[j];
+        //     }
+        // }
+
+        // // Calculate Euclidean distances
+        // std::vector<double> distances = calculateDistances(points, mean);
+
+        // // Output the distances
+        // for (std::size_t i = 0; i < distances.size(); ++i) {
+        //     std::cout << "Distance " << i + 1 << ": " << distances[i] << std::endl;
+        // }
+
+        // // Calculate the 90th percentile of distances
+        // std::sort(distances.begin(), distances.end());
+        // double percentileValue = distances[static_cast<size_t>(0.9 * distances.size())];
+        
+        // // Print the predicted value for the 90th percentile
+        // std::cout << "Predicted value for " << percentileValue << " is: " << cappedLogCurve(percentileValue) << std::endl;
+
+
+    } catch (...) {
+        res.success = false;
+    }
+    res.success = true;
+
+    return true;
+}
+
 int main(int argc, char **argv) {
     loguru::init(argc, argv);
     ros::init(argc, argv, "laserMapping");
@@ -1507,7 +1812,13 @@ int main(int argc, char **argv) {
         layer_size.push_back(layer_point_size[i]);
     }
 
+    default_min_eigen_value  = min_eigen_value;
+    default_max_layer = max_layer;
+    default_layer_point_size = layer_point_size;
+
     default_voxel_size = max_voxel_size;
+
+    voxel_size_validator = max_voxel_size;
     filter_size_surf_min_default = filter_size_surf_min;
 
     path.header.stamp = ros::Time::now();
@@ -1588,6 +1899,8 @@ int main(int argc, char **argv) {
     ros::ServiceServer kill_when_done_svc = nh.advertiseService("set_kill_on_finish", set_kill_on_finish);
 
     ros::ServiceServer save_lio_cloud_svc = nh.advertiseService("save_lio_cloud", save_lio_cloud_svc_cbk);
+    ros::ServiceServer save_frame_to_csv = nh.advertiseService("frame_to_csv", save_points_to_csv_cbk);
+
     ros::ServiceServer save_color_cloud_svc = nh.advertiseService("save_color_cloud", save_color_cloud_svc_cbk);
 
     ros::ServiceServer set_voxel_size_svc = nh.advertiseService("set_voxel_size", set_voxel_size);
@@ -1625,6 +1938,7 @@ int main(int argc, char **argv) {
     // state_point.ba = Init_LI->get_acc_bias();
     // }
 
+ 
     signal(SIGINT, SigHandle);
     ros::Rate rate(5000);
     bool status = ros::ok();
@@ -1640,6 +1954,10 @@ int main(int argc, char **argv) {
 
         if (queue_empty and kill_on_finish) {
             LOG_S(WARNING) << "kill_on_finish is set and queue is empty, gracefully exiting ..." << std::endl;
+
+            // outputFile.close();
+            // std::cout << "Data written to output.csv" << std::endl;
+
             break;
         }
 
@@ -1674,6 +1992,7 @@ int main(int argc, char **argv) {
 
                 std::cout << kf.get_P() << std::endl;
                 // 计算第一帧所有点的covariance 并用于构建初始地图
+                // double average_intensity = 0;
                 for (size_t i = 0; i < world_lidar->size(); i++) {
                     pointWithCov pv;
                     pv.point << world_lidar->points[i].x, world_lidar->points[i].y,
@@ -1685,6 +2004,7 @@ int main(int argc, char **argv) {
                     if (point_this[2] == 0) {
                         point_this[2] = 0.001;
                     }
+                    // average_intensity += world_lidar->points[i].intensity;
                     M3D cov_lidar = calcBodyCov(point_this, ranging_cov, angle_cov);
                     // 转换到world系
                     M3D cov_world = transformLiDARCovToWorld(point_this, kf, cov_lidar);
@@ -1696,7 +2016,8 @@ int main(int argc, char **argv) {
                     sigma_pv[1] = sqrt(sigma_pv[1]);
                     sigma_pv[2] = sqrt(sigma_pv[2]);
                 }
-
+                // average_intensity /= world_lidar->size();
+                // std::cout << endl << "Intensity : " << average_intensity << endl;
                 buildVoxelMap(pv_list, max_voxel_size, max_layer, layer_size,
                               max_points_size, max_cov_points_size, min_eigen_value,
                               voxel_map);
@@ -1710,6 +2031,8 @@ int main(int argc, char **argv) {
                 init_map = true;
                 continue;
             }
+        
+            // frame++;
 
             /*** downsample the feature points in a scan ***/
             downSizeFilterSurf.setInputCloud(feats_undistort);
@@ -1739,11 +2062,11 @@ int main(int argc, char **argv) {
             double t_update_end = omp_get_wtime();
             sum_optimize_time += t_update_end - t_update_start;
 
-            std::cout<< "LIDAR PREV STATE :" << pos_lid <<endl;
+            // std::cout<< "LIDAR PREV STATE :" << pos_lid <<endl;
             state_point = kf.get_x();
             euler_cur = SO3ToEuler(state_point.rot);
             pos_lid = state_point.pos + state_point.rot * state_point.offset_T_L_I;
-            std::cout<< "LIDAR UPDATE STATE :" << pos_lid <<endl;
+            // std::cout<< "LIDAR UPDATE STATE :" << pos_lid <<endl;
 
             geoQuat.x = state_point.rot.coeffs()[0];
             geoQuat.y = state_point.rot.coeffs()[1];
@@ -1766,15 +2089,23 @@ int main(int argc, char **argv) {
             std::vector<pointWithCov> pv_list;
             PointCloudXYZINormal::Ptr world_lidar(new PointCloudXYZINormal);
             transformLidar(state_point, feats_down_body, world_lidar);
+            // double average_intensity = 0;
+            // vector<double> intensity_range;
             for (size_t i = 0; i < feats_down_body->size(); i++) {
                 // 保存body系和world系坐标
                 pointWithCov pv;
                 pv.point << feats_down_body->points[i].x, feats_down_body->points[i].y, feats_down_body->points[i].z;
+
+
+                // average_intensity += feats_down_body->points[i].intensity;
+                // intensity_range.push_back(feats_down_body->points[i].intensity);
                 // 计算lidar点的cov
                 // FIXME 这里错误的使用世界系的点来calcBodyCov时 反倒在某些seq（比如hilti2022的03 15）上效果更好 需要考虑是不是init_plane时使用更大的cov更好
                 // 注意这个在每次迭代时是存在重复计算的 因为lidar系的点云covariance是不变的
                 // M3D cov_lidar = calcBodyCov(pv.point, ranging_cov, angle_cov);
                 M3D cov_lidar = var_down_body[i];
+                // std::cout<< endl << "Covariance mat: " << endl;
+                // std::cout<< cov_lidar.matrix() << endl;
                 // 将body系的var转换到world系
                 M3D cov_world = transformLiDARCovToWorld(pv.point, kf, cov_lidar);
 
@@ -1783,6 +2114,42 @@ int main(int argc, char **argv) {
                 pv.point << world_lidar->points[i].x, world_lidar->points[i].y, world_lidar->points[i].z;
                 pv_list.push_back(pv);
             }
+
+            // if (frame ==1) break;
+
+            // average_intensity /= feats_d 23.8952 -6.05306  13.0872
+
+            // std::cout << "*******************************************" << endl;
+            // std::cout << endl << "average intensity: " << average_intensity << endl;
+            // int intensity_arr[intensity_range.size()];
+
+            // // Copy vector data to the array
+            // size_t index = 0;
+            // for (const auto& value : intensity_range) {
+            //     intensity_arr[index++] = value;
+            // }
+            // std::cout<< "Intensity range: [";
+            // for (const auto& value : intensity_range) {
+            //         std::cout << value << " ,";
+            //     }
+            // std::cout << " ]" << endl;
+            // std::cout << "*******************************************" << endl;
+
+
+
+            // // Check if the file is opened successfully
+            // if (!outputFile.is_open()) {
+            //     std::cerr << "Error opening the file!" << std::endl;
+            //     return 1; // Return an error code
+            // }
+
+            // Write variable values to the file
+
+
+
+
+            
+
 
             t_update_start = omp_get_wtime();
             std::sort(pv_list.begin(), pv_list.end(), var_contrast);
@@ -1852,6 +2219,8 @@ int main(int argc, char **argv) {
             // publish_effect_world(pubLaserCloudEffect);
             // publish_map(pubLaserCloudMap);
         }
+
+
 
         status = ros::ok();
         rate.sleep();

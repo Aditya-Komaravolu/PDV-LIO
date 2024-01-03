@@ -889,7 +889,7 @@ void BuildResidualListOMP(const unordered_map<VOXEL_LOC, OctoTree *> &voxel_map,
     //     useful_ptpl[i] = false;
     // }
 
-    while (retry) {
+    // while (retry) {
     // Original function code
     std::mutex mylock;
     ptpl_list.clear();
@@ -983,19 +983,19 @@ void BuildResidualListOMP(const unordered_map<VOXEL_LOC, OctoTree *> &voxel_map,
             ptpl_list.push_back(all_ptpl_list[i]);
         }
     }
-    if (ptpl_list.empty() && std::abs(voxel_size - initial_voxel_size) < 1 && initial_max_layer < 9 ) {
-            initial_voxel_size += 0.05;
-            current_leaf_size -= 0.01;
-            downSizeFilterSurf.setLeafSize(current_leaf_size, current_leaf_size, current_leaf_size);
-            initial_max_layer +2;
-            std::cout << endl << "Retrying with increased voxel size: " << initial_voxel_size << std::endl;
-            std::cout << endl << "Retrying with decreased down sample size: " << current_leaf_size << std::endl;
-            std::cout << endl << "Retrying with increased octotree search: " << initial_max_layer << std::endl;
-    } else {
-            retry = false; // Exit the retry loop if ptpl_list is not empty
-            // break;
-        }
-    }
+    // if (ptpl_list.empty() && std::abs(voxel_size - initial_voxel_size) < 1 && initial_max_layer < 9 ) {
+    //         initial_voxel_size += 0.05;
+    //         current_leaf_size -= 0.01;
+    //         downSizeFilterSurf.setLeafSize(current_leaf_size, current_leaf_size, current_leaf_size);
+    //         initial_max_layer +2;
+    //         std::cout << endl << "Retrying with increased voxel size: " << initial_voxel_size << std::endl;
+    //         std::cout << endl << "Retrying with decreased down sample size: " << current_leaf_size << std::endl;
+    //         std::cout << endl << "Retrying with increased octotree search: " << initial_max_layer << std::endl;
+    // } else {
+    //         retry = false; // Exit the retry loop if ptpl_list is not empty
+    //         // break;
+    //     }
+    // }
 }
 
 void BuildResidualListNormal(
@@ -1356,6 +1356,8 @@ M3D calcBodyCov(Eigen::Vector3d &pb, const float range_inc, const float degree_i
     N << base_vector1(0), base_vector2(0), base_vector1(1), base_vector2(1),
         base_vector1(2), base_vector2(2);
     Eigen::Matrix<double, 3, 2> A = range * direction_hat * N;
+
+
     return direction * range_var * direction.transpose() +
            A * direction_var * A.transpose();
 };
