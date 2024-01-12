@@ -985,8 +985,10 @@ void BuildResidualListOMP(const unordered_map<VOXEL_LOC, OctoTree *> &voxel_map,
     }
     if (ptpl_list.empty() && std::abs(voxel_size - initial_voxel_size) < 1 && initial_max_layer < 9 ) {
             initial_voxel_size += 0.05;
-            current_leaf_size -= 0.01;
-            downSizeFilterSurf.setLeafSize(current_leaf_size, current_leaf_size, current_leaf_size);
+            if (current_leaf_size > 0.01){
+                current_leaf_size -= 0.01;
+                downSizeFilterSurf.setLeafSize(current_leaf_size, current_leaf_size, current_leaf_size);
+            }
             initial_max_layer +2;
             std::cout << endl << "Retrying with increased voxel size: " << initial_voxel_size << std::endl;
             std::cout << endl << "Retrying with decreased down sample size: " << current_leaf_size << std::endl;
