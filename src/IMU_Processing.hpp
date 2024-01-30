@@ -23,6 +23,8 @@
 #include <fstream>
 #include <mutex>
 #include <thread>
+// #include <json/json.h>
+#include <nlohmann/json.hpp>
 
 #include "use-ikfom.hpp"
 
@@ -51,7 +53,7 @@ class ImuProcess {
     void set_gyr_bias_cov(const V3D &b_g);
     void set_acc_bias_cov(const V3D &b_a);
     Eigen::Matrix<double, 12, 12> Q;
-    void Process(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 12, input_ikfom> &kf_state, PointCloudXYZINormal::Ptr pcl_un_);
+    void Process(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 12, input_ikfom> &kf_state, PointCloudXYZINormal::Ptr pcl_un_, bool fetch_imu_init_state_from_prev_slam, string last_state_json);
 
     ofstream fout_imu;
     V3D cov_acc;
@@ -65,7 +67,7 @@ class ImuProcess {
     SO3 Initial_R_wrt_G;
 
    private:
-    void IMU_init(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 12, input_ikfom> &kf_state, int &N);
+    void IMU_init(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 12, input_ikfom> &kf_state, int &N, bool fetch_imu_init_state_from_prev_slam, string last_state_json);
     void UndistortPcl(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 12, input_ikfom> &kf_state, PointCloudXYZINormal &pcl_in_out);
 
     PointCloudXYZRGBI::Ptr cur_pcl_un_;
@@ -149,7 +151,8 @@ void ImuProcess::set_acc_bias_cov(const V3D &b_a) {
     cov_bias_acc = b_a;
 }
 
-void ImuProcess::IMU_init(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 12, input_ikfom> &kf_state, int &N) {
+void ImuProcess::IMU_init(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 12, input_ikfom> &kf_state, int &N, bool fetch_imu_init_state_from_prev_slam, string last_state_json )
+{
     /** 1. initializing the gravity, gyro bias, acc and gyro covariance
      ** 2. normalize the acceleration measurenments to unit gravity **/
 
@@ -183,10 +186,81 @@ void ImuProcess::IMU_init(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 
         N++;
     }
     state_ikfom init_state = kf_state.get_x();
-    init_state.grav = S2(-mean_acc / mean_acc.norm() * G_m_s2);
+    // init_state.grav = S2(- mean_acc / mean_acc.norm() * G_m_s2);
+    // init_state.pos<<10,10,10;
+    // std::cout<<"State set"<<endl;
+    // Eigen::Quaterniond rotation = Eigen::Quaterniond::FromTwoVectors(mean_acc, Eigen::Vector3d::UnitZ());
 
-    // state_inout.rot = Eye3d; // Exp(mean_acc.cross(V3D(0, 0, -1 / scale_gravity)));
-    init_state.bg = mean_gyr;
+    if (fetch_imu_init_state_from_prev_slam) {
+
+        if (std::filesystem::exists(last_state_json)) {
+            std::cout<< "Prev state json found at :" << last_state_json << "\n";
+            std::ifstream jsonFile(last_state_json, std::ifstream::binary);
+
+            nlohmann::json json_data;
+            jsonFile >> json_data;
+
+            // Extract rotation values
+            float rotations_arr[] = {
+                
+                json_data["rotation"][0].get<float>(),
+                json_data["rotation"][1].get<float>(),
+                json_data["rotation"][2].get<float>(),
+                json_data["rotation"][3].get<float>(),
+
+            };
+            // rotations_arr[0] = json_data["rotation"][0].get<float>();
+            // rotations_arr[1] = json_data["rotation"][1].get<float>();
+            // rotations_arr[2] = json_data["rotation"][2].get<float>();
+            // rotations_arr[3] = json_data["rotation"][3].get<float>();
+
+            // Extract position values
+            float positions_arr[] = {
+                json_data["position"][0].get<float>(),
+                json_data["position"][1].get<float>(),
+                json_data["position"][2].get<float>()
+            };
+            // positions_arr[0] = json_data["position"][0].get<float>();
+            // positions_arr[1] = json_data["position"][1].get<float>();
+            // positions_arr[2] = json_data["position"][2].get<float>();
+
+            // Print the extracted values
+            std::cout << "Rotations: " << "[" ;
+            for(int i=0; i<4; i++) {
+                std::cout << rotations_arr[i] << ", ";
+            };
+            std::cout << "]" << "\n";
+            std::cout << "Position: " << "[" ;
+            for(int i=0; i<3; i++) {
+                std::cout << positions_arr[i] << ", ";
+            };
+            std::cout << "]" << "\n";
+
+
+
+            Eigen::Quaterniond rotation(rotations_arr[0], rotations_arr[1], rotations_arr[2], rotations_arr[3]);
+            // last_odometry w,x,y,z
+            mean_acc = rotation * mean_acc;
+            mean_gyr = rotation * mean_gyr;
+            init_state.rot = rotation;
+            init_state.pos << positions_arr[0], positions_arr[1], positions_arr[2]; // last_odometry pos
+            init_state.grav = S2(-mean_acc / mean_acc.norm() * G_m_s2);
+            // state_inout.rot = Eye3d; // Exp(mean_acc.cross(V3D(0, 0, -1 / scale_gravity)));
+            init_state.bg = mean_gyr;
+        }
+        else {
+            init_state.grav = S2(- mean_acc / mean_acc.norm() * G_m_s2);
+            //state_inout.rot = Eye3d; // Exp(mean_acc.cross(V3D(0, 0, -1 / scale_gravity)));
+            init_state.bg  = mean_gyr; 
+        }
+        
+    }
+    else {
+        init_state.grav = S2(- mean_acc / mean_acc.norm() * G_m_s2);
+        //state_inout.rot = Eye3d; // Exp(mean_acc.cross(V3D(0, 0, -1 / scale_gravity)));
+        init_state.bg  = mean_gyr;
+    }
+
     init_state.offset_T_L_I = Lidar_T_wrt_IMU;
     init_state.offset_R_L_I = Lidar_R_wrt_IMU;
     kf_state.change_x(init_state);
@@ -205,6 +279,7 @@ void ImuProcess::IMU_init(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 
     kf_state.change_P(init_P);
     last_imu_ = meas.imu.back();
 }
+
 
 void ImuProcess::UndistortPcl(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 12, input_ikfom> &kf_state, PointCloudXYZINormal &pcl_out) {
     /*** add the imu of the last frame-tail to the of current frame-head ***/
@@ -322,7 +397,7 @@ void ImuProcess::UndistortPcl(const MeasureGroup &meas, esekfom::esekf<state_ikf
     }
 }
 
-void ImuProcess::Process(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 12, input_ikfom> &kf_state, PointCloudXYZINormal::Ptr cur_pcl_un_) {
+void ImuProcess::Process(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 12, input_ikfom> &kf_state, PointCloudXYZINormal::Ptr cur_pcl_un_, bool fetch_imu_init_state_from_prev_slam, string last_state_json) {
     double t1, t2, t3;
     t1 = omp_get_wtime();
 
@@ -333,7 +408,7 @@ void ImuProcess::Process(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 1
 
     if (imu_need_init_) {
         /// The very first lidar frame
-        IMU_init(meas, kf_state, init_iter_num);
+        IMU_init(meas, kf_state, init_iter_num, fetch_imu_init_state_from_prev_slam, last_state_json);
 
         imu_need_init_ = true;
 

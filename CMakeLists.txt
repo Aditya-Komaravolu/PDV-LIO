@@ -88,8 +88,11 @@ catkin_package(
   INCLUDE_DIRS
 )
 
+# find_package(jsoncpp REQUIRED)
+
 add_executable(pv_lio_node src/voxelMapping.cpp src/preprocess.cpp src/calibration_data.hpp src/openmvs_utils.hpp src/r3live_coloring.hpp src/services.hpp src/loguru.cpp src/loguru.hpp src/common.hpp)
-target_link_libraries(pv_lio_node ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${PYTHON_LIBRARIES} stdc++fs ${Boost_LIBRARIES} ${Boost_FILESYSTEM_LIBRARY} ${Boost_SERIALIZATION_LIBRARY})
+# target_link_libraries(pv_lio_node  ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${PYTHON_LIBRARIES} stdc++fs ${Boost_LIBRARIES} ${Boost_FILESYSTEM_LIBRARY} ${Boost_SERIALIZATION_LIBRARY} jsoncpp)
+target_link_libraries(pv_lio_node  ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${PYTHON_LIBRARIES} stdc++fs ${Boost_LIBRARIES} ${Boost_FILESYSTEM_LIBRARY} ${Boost_SERIALIZATION_LIBRARY})
 target_include_directories(pv_lio_node PRIVATE ${PYTHON_INCLUDE_DIRS})
 
 add_executable(

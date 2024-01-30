@@ -63,7 +63,7 @@ camera:
     #                     0,          0,          0,          1]
 
 preprocess,:
-    lidar,_type: 1   ,             # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR,
+    lidar_type: 1              # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR,
     scan_line: 6
     scan_rate: 10
     blind: 0.0
@@ -108,6 +108,8 @@ save:
     cloud_pcd: true
     cloud_ply: false
     cloud_lio_pcd: true
+    save_odometry_last_state: true
+    load_state_json: /home/inkers/kora_aditya/catkin_slam_ws/odometry_dump/odometry.json
 
 noise_model:
     ranging_cov: 0.02

@@ -879,18 +879,6 @@ void BuildResidualListOMP(const unordered_map<VOXEL_LOC, OctoTree *> &voxel_map,
     bool retry = true;
     auto current_leaf_size = downSizeFilterSurf.getLeafSize()[0];
 
-    // std::mutex mylock;
-    // ptpl_list.clear();
-    // std::vector<ptpl> all_ptpl_list(pv_list.size());
-    // std::vector<bool> useful_ptpl(pv_list.size());
-    // std::vector<size_t> index(pv_list.size());
-    // for (size_t i = 0; i < index.size(); ++i) {
-    //     index[i] = i;
-    //     useful_ptpl[i] = false;
-    // }
-
-    while (retry) {
-    // Original function code
     std::mutex mylock;
     ptpl_list.clear();
     std::vector<ptpl> all_ptpl_list(pv_list.size());
@@ -900,6 +888,18 @@ void BuildResidualListOMP(const unordered_map<VOXEL_LOC, OctoTree *> &voxel_map,
         index[i] = i;
         useful_ptpl[i] = false;
     }
+
+    // while (retry) {
+    // // Original function code
+    // std::mutex mylock;
+    // ptpl_list.clear();
+    // std::vector<ptpl> all_ptpl_list(pv_list.size());
+    // std::vector<bool> useful_ptpl(pv_list.size());
+    // std::vector<size_t> index(pv_list.size());
+    // for (size_t i = 0; i < index.size(); ++i) {
+    //     index[i] = i;
+    //     useful_ptpl[i] = false;
+    // }
 // #ifdef MP_EN
 //   omp_set_num_threads(MP_PROC_NUM);
 // #endif
@@ -983,21 +983,21 @@ void BuildResidualListOMP(const unordered_map<VOXEL_LOC, OctoTree *> &voxel_map,
             ptpl_list.push_back(all_ptpl_list[i]);
         }
     }
-    if (ptpl_list.empty() && std::abs(voxel_size - initial_voxel_size) < 1 && initial_max_layer < 9 ) {
-            initial_voxel_size += 0.05;
-            if (current_leaf_size > 0.01){
-                current_leaf_size -= 0.01;
-                downSizeFilterSurf.setLeafSize(current_leaf_size, current_leaf_size, current_leaf_size);
-            }
-            initial_max_layer +2;
-            std::cout << endl << "Retrying with increased voxel size: " << initial_voxel_size << std::endl;
-            std::cout << endl << "Retrying with decreased down sample size: " << current_leaf_size << std::endl;
-            std::cout << endl << "Retrying with increased octotree search: " << initial_max_layer << std::endl;
-    } else {
-            retry = false; // Exit the retry loop if ptpl_list is not empty
-            // break;
-        }
-    }
+    // if (ptpl_list.empty() && std::abs(voxel_size - initial_voxel_size) < 1 && initial_max_layer < 9 ) {
+    //         initial_voxel_size += 0.05;
+    //         if (current_leaf_size > 0.01){
+    //             current_leaf_size -= 0.01;
+    //             downSizeFilterSurf.setLeafSize(current_leaf_size, current_leaf_size, current_leaf_size);
+    //         }
+    //         initial_max_layer +2;
+    //         std::cout << endl << "Retrying with increased voxel size: " << initial_voxel_size << std::endl;
+    //         std::cout << endl << "Retrying with decreased down sample size: " << current_leaf_size << std::endl;
+    //         std::cout << endl << "Retrying with increased octotree search: " << initial_max_layer << std::endl;
+    // } else {
+    //         retry = false; // Exit the retry loop if ptpl_list is not empty
+    //         // break;
+    //     }
+    // }
 }
 
 void BuildResidualListNormal(

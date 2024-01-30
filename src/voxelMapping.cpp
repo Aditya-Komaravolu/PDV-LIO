@@ -68,6 +68,9 @@
 #include <mutex>
 #include <opencv2/opencv.hpp>
 #include <thread>
+// #include <json/json.h>
+#include <nlohmann/json.hpp>
+
 
 #include "IMU_Processing.hpp"
 #include "calibration_data.hpp"
@@ -106,7 +109,10 @@ double lidar_time_offset = 0.0;
 bool save_hba_pose_en = false;
 std::string save_base_path;
 double time_diff_lidar_to_imu = 0.0;
+string last_state_json_path;
 
+bool save_odometry_last_state = false;
+ 
 bool enable_small_rooms;
  
 string map_file_path, lid_topic, imu_topic, cam_topic, small_room_topic, pcd_save_path;
@@ -801,30 +807,30 @@ std::tuple<bool, bool> sync_packages(MeasureGroup &meas) {
                 std::cout << endl << "\033[1;32msetting down_sample ratio to: \033[0m" << new_downsample_value->data << "\033[1;32m set downsample ratio timestamp: \033[0m" << new_downsample_value->header.stamp.toSec() << "\033[1;32m lidar last timestamp: \033[0m" << last_timestamp_lidar << std::endl;
 
             }
-            max_voxel_size = front->data;
+            // max_voxel_size = front->data;
             voxel_size_buffer.pop_front();
-            max_layer = first_thres_values->max_layer;
-            min_eigen_value = first_thres_values->plannar_threshold;
-            layer_point_size = first_thres_values->layer_point_size;
-            downSizeFilterSurf.setLeafSize(new_downsample_value->data, new_downsample_value->data, new_downsample_value->data);
+            // max_layer = first_thres_values->max_layer;
+            // min_eigen_value = first_thres_values->plannar_threshold;
+            // layer_point_size = first_thres_values->layer_point_size;
+            // downSizeFilterSurf.setLeafSize(new_downsample_value->data, new_downsample_value->data, new_downsample_value->data);
             threshold_values_buffer.pop_front();
             down_sample_buffer.pop_front();
             
 
 
-            std::cout << " " << endl;
-            std::cout<< "\033[1;32m******************************\033[0m" << endl;
-            std::cout << "\033[1;32mTHRESHOLD UPDATED at lidar time: \033[0m" << lidar_end_time << endl;
-            std::cout << "\033[1;32m******************************\033[0m" << endl;
-            std::cout<< "\033[1;32mTimestamp: \033[0m" << first_thres_values->header.stamp.toSec() << endl;
-            std::cout<< "\033[1;32mMax layer: \033[0m" << max_layer << endl;
-            std::cout<< "\033[1;32mLayer Point Size: [\033[0m";
-            for (const auto& value : layer_point_size) {
-                    std::cout << value << "\033[1;32m ,\033[0m";
-                }
-            std::cout << "\033[1;32m ]\033[0m" << endl;
-            std::cout<< "\033[1;32mPlanar Threshold: \033[0m" << min_eigen_value << endl;
-            std::cout<< "\033[1;32m******************************\033[0m" << endl;
+            // std::cout << " " << endl;
+            // std::cout<< "\033[1;32m******************************\033[0m" << endl;
+            // std::cout << "\033[1;32mTHRESHOLD UPDATED at lidar time: \033[0m" << lidar_end_time << endl;
+            // std::cout << "\033[1;32m******************************\033[0m" << endl;
+            // std::cout<< "\033[1;32mTimestamp: \033[0m" << first_thres_values->header.stamp.toSec() << endl;
+            // std::cout<< "\033[1;32mMax layer: \033[0m" << max_layer << endl;
+            // std::cout<< "\033[1;32mLayer Point Size: [\033[0m";
+            // for (const auto& value : layer_point_size) {
+            //         std::cout << value << "\033[1;32m ,\033[0m";
+            //     }
+            // std::cout << "\033[1;32m ]\033[0m" << endl;
+            // std::cout<< "\033[1;32mPlanar Threshold: \033[0m" << min_eigen_value << endl;
+            // std::cout<< "\033[1;32m******************************\033[0m" << endl;
 
         }
     }
@@ -1496,6 +1502,16 @@ int main(int argc, char **argv) {
     nh.param<int>("publish/publish_max_voxel_layer", publish_max_voxel_layer, 0);
     nh.param<bool>("publish/pub_color_map", publish_color_map, false);
 
+
+    // odometry save params for breaking slam
+    nh.param<bool>("save/save_odometry_last_state", save_odometry_last_state, false);
+    nh.param<std::string>("save/load_state_json", last_state_json_path, "");
+
+    bool fetch_imu_init_state_from_prev_slam = save_odometry_last_state;
+
+
+
+
     nh.param<double>("preprocess/blind", p_pre->blind, 0.01);
     nh.param<int>("preprocess/lidar_type", p_pre->lidar_type, AVIA);
     nh.param<int>("preprocess/scan_line", p_pre->N_SCANS, 16);
@@ -1556,7 +1572,7 @@ int main(int argc, char **argv) {
     ros::Subscriber sub_voxel_size = nh.subscribe("/set_voxel_size", 10000, set_voxel_size_cbk);
 
     // if (enable_small_rooms==1){
-    ros::Subscriber en_small_rooms = nh.subscribe(small_room_topic, 1000, publish_small_room_info);
+    // ros::Subscriber en_small_rooms = nh.subscribe(small_room_topic, 1000, publish_small_room_info);
     // }
     // if (!small_room_timestamps.empty()){
     // ros::Subscriber change_vs = nh.subscribe(lid_topic, 200000, set_dynamic_voxelization_params_cbk);
@@ -1607,13 +1623,7 @@ int main(int argc, char **argv) {
         filesystem::create_directories(save_base_path + "/image_pose/");
     }
 
-    // for Plane Map
-    bool init_map = false;
-
-    double sum_optimize_time = 0, sum_update_time = 0;
-    int scan_index = 0;
-
-    // possibly make it work with li init
+        // possibly make it work with li init
     // {
     // state_point.offset_R_L_I = Init_LI->get_R_LI();
     // state_point.offset_T_L_I = Init_LI->get_T_LI();
@@ -1624,6 +1634,24 @@ int main(int argc, char **argv) {
     // state_point.bg = Init_LI->get_gyro_bias();
     // state_point.ba = Init_LI->get_acc_bias();
     // }
+
+    // while (true) {
+    //     start_pv_lio_algorithm(fetch_imu_init_state_from_prev_slam, last_state_json_path);
+    // }
+
+// }
+
+
+// def start_pv_lio_algorithm(bool &fetch_imu_init_state_from_prev_slam, string &last_state_json_path) {
+
+
+    // for Plane Map
+    bool init_map = false;
+
+    double sum_optimize_time = 0, sum_update_time = 0;
+    int scan_index = 0;
+
+
 
     signal(SIGINT, SigHandle);
     ros::Rate rate(5000);
@@ -1638,9 +1666,10 @@ int main(int argc, char **argv) {
             LOG_S(INFO) << "packages synced: " << packages_synced << ", queue_empty: " << queue_empty << std::endl;
         }
 
-        if (queue_empty and kill_on_finish) {
-            LOG_S(WARNING) << "kill_on_finish is set and queue is empty, gracefully exiting ..." << std::endl;
+        if (kill_on_finish) {
+            LOG_S(WARNING) << "kill_on_finish is called, gracefully exiting ..." << std::endl;
             break;
+            
         }
 
         if (packages_synced) {
@@ -1651,7 +1680,15 @@ int main(int argc, char **argv) {
                 continue;
             }
 
-            p_imu->Process(Measures, kf, feats_undistort);
+            // p_imu->Process(Measures, kf, feats_undistort, fetch_imu_init_state_from_prev_slam, last_state_json_path);
+            if (save_odometry_last_state) {
+                p_imu->Process(Measures, kf, feats_undistort, fetch_imu_init_state_from_prev_slam, last_state_json_path);
+
+            }
+            else{
+                p_imu->Process(Measures, kf, feats_undistort, false, "NA");
+
+            }
             state_point = kf.get_x();
             pos_lid = state_point.pos + state_point.rot * state_point.offset_T_L_I;
 
@@ -1878,9 +1915,55 @@ int main(int argc, char **argv) {
         pcl::PCDWriter pcd_writer;
         LOG_S(INFO) << "current lio only scan saved to " << file_name << endl;
         pcd_writer.writeBinary(all_points_dir, *pcl_wait_save);
-        pcl::io::savePLYFileASCII(save_base_path + "/scans.ply", *pcl_wait_save);
-        pcl::io::savePCDFileASCII(save_base_path + "/scans2.pcd", *pcl_wait_save);
+        // pcl::io::savePLYFileASCII(save_base_path + "/scans.ply", *pcl_wait_save);
+        // pcl::io::savePCDFileASCII(save_base_path + "/scans2.pcd", *pcl_wait_save);
     }
+
+    if (save_odometry_last_state) {
+        nlohmann::json data_dump;
+
+        state_ikfom final_state = kf.get_x();
+
+        // double position_arr[] = {
+        //     final_state.ba.x(), 
+        //     final_state.ba.y(), 
+        //     final_state.ba.z()
+        // };
+
+        double position_arr[] = {
+            odomAftMapped.pose.pose.position.x,
+            odomAftMapped.pose.pose.position.y,
+            odomAftMapped.pose.pose.position.z 
+        };
+        // double rotation_arr[] = {
+        //     final_state.rot.coeffs()[0],
+        //     final_state.rot.coeffs()[1],
+        //     final_state.rot.coeffs()[2],
+        //     final_state.rot.coeffs()[3], 
+
+        // };
+
+        double rotation_arr[] = {
+            odomAftMapped.pose.pose.orientation.w,
+            odomAftMapped.pose.pose.orientation.x,
+            odomAftMapped.pose.pose.orientation.y,
+            odomAftMapped.pose.pose.orientation.z
+        };
+
+        data_dump["position"] = position_arr;
+        data_dump["rotation"] = rotation_arr;
+
+        std::ofstream jsonFile(last_state_json_path);
+
+        if (jsonFile.is_open()) {
+            jsonFile << std::setw(4) << data_dump;  // Optional: Set indentation for better readability
+            jsonFile.close();
+            std::cout << "JSON file written successfully to " << last_state_json_path << std::endl;
+        } else {
+            std::cerr << "Unable to open the file: " << last_state_json_path << std::endl;
+        }
+    }
+
 
     return EXIT_SUCCESS;
 }
