@@ -79,6 +79,7 @@ class ImuProcess {
     V3D Lidar_T_wrt_IMU;
     V3D mean_acc;
     V3D mean_gyr;
+    V3D grav;
     V3D angvel_last;
     V3D acc_s_last;
     double start_timestamp_;
@@ -201,12 +202,12 @@ void ImuProcess::IMU_init(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 
             jsonFile >> json_data;
 
             // Extract rotation values
-            float rotations_arr[] = {
+            double rotations_arr[] = {
                 
-                json_data["rotation"][0].get<float>(),
-                json_data["rotation"][1].get<float>(),
-                json_data["rotation"][2].get<float>(),
-                json_data["rotation"][3].get<float>(),
+                json_data["rotation"][0],
+                json_data["rotation"][1],
+                json_data["rotation"][2],
+                json_data["rotation"][3],
 
             };
             // rotations_arr[0] = json_data["rotation"][0].get<float>();
@@ -215,16 +216,34 @@ void ImuProcess::IMU_init(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 
             // rotations_arr[3] = json_data["rotation"][3].get<float>();
 
             // Extract position values
-            float positions_arr[] = {
-                json_data["position"][0].get<float>(),
-                json_data["position"][1].get<float>(),
-                json_data["position"][2].get<float>()
+            double positions_arr[] = {
+                json_data["position"][0],
+                json_data["position"][1],
+                json_data["position"][2]
             };
             // positions_arr[0] = json_data["position"][0].get<float>();
             // positions_arr[1] = json_data["position"][1].get<float>();
             // positions_arr[2] = json_data["position"][2].get<float>();
 
             // Print the extracted values
+            // float ba_arr[] = {
+            //     json_data["ba"][0].get<float>(),
+            //     json_data["ba"][2].get<float>(),
+            //     json_data["ba"][1].get<float>(),
+            // };
+
+            double bg_arr[] = {
+                json_data["bg"][0],
+                json_data["bg"][1],
+                json_data["bg"][2]
+            };
+
+            double grav_arr[] = {
+                json_data["grav"][0],
+                json_data["grav"][1],
+                json_data["grav"][2]
+            };
+
             std::cout << "Rotations: " << "[" ;
             for(int i=0; i<4; i++) {
                 std::cout << rotations_arr[i] << ", ";
@@ -240,11 +259,12 @@ void ImuProcess::IMU_init(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 
 
             Eigen::Quaterniond rotation(rotations_arr[0], rotations_arr[1], rotations_arr[2], rotations_arr[3]);
             // last_odometry w,x,y,z
-            mean_acc = rotation * mean_acc;
-            mean_gyr = rotation * mean_gyr;
+            // mean_acc<<ba_arr[0],ba_arr[1],ba_arr[2];
+            mean_gyr<<bg_arr[0],bg_arr[1],bg_arr[2];
+            grav<<grav_arr[0],grav_arr[1],grav_arr[2];
             init_state.rot = rotation;
             init_state.pos << positions_arr[0], positions_arr[1], positions_arr[2]; // last_odometry pos
-            init_state.grav = S2(-mean_acc / mean_acc.norm() * G_m_s2);
+            init_state.grav = S2(grav);
             // state_inout.rot = Eye3d; // Exp(mean_acc.cross(V3D(0, 0, -1 / scale_gravity)));
             init_state.bg = mean_gyr;
         }

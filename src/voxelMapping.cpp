@@ -1666,7 +1666,7 @@ int main(int argc, char **argv) {
             LOG_S(INFO) << "packages synced: " << packages_synced << ", queue_empty: " << queue_empty << std::endl;
         }
 
-        if (kill_on_finish) {
+        if (lidar_buffer.empty() and kill_on_finish) {
             LOG_S(WARNING) << "kill_on_finish is called, gracefully exiting ..." << std::endl;
             break;
             
@@ -1924,34 +1924,53 @@ int main(int argc, char **argv) {
 
         state_ikfom final_state = kf.get_x();
 
-        // double position_arr[] = {
-        //     final_state.ba.x(), 
-        //     final_state.ba.y(), 
-        //     final_state.ba.z()
-        // };
-
         double position_arr[] = {
-            odomAftMapped.pose.pose.position.x,
-            odomAftMapped.pose.pose.position.y,
-            odomAftMapped.pose.pose.position.z 
+            final_state.pos(0), 
+            final_state.pos(1), 
+            final_state.pos(2)
         };
-        // double rotation_arr[] = {
-        //     final_state.rot.coeffs()[0],
-        //     final_state.rot.coeffs()[1],
-        //     final_state.rot.coeffs()[2],
-        //     final_state.rot.coeffs()[3], 
 
+        // double position_arr[] = {
+        //     odomAftMapped.pose.pose.position.x,
+        //     odomAftMapped.pose.pose.position.y,
+        //     odomAftMapped.pose.pose.position.z 
         // };
-
         double rotation_arr[] = {
-            odomAftMapped.pose.pose.orientation.w,
-            odomAftMapped.pose.pose.orientation.x,
-            odomAftMapped.pose.pose.orientation.y,
-            odomAftMapped.pose.pose.orientation.z
+            final_state.rot.coeffs()[3], 
+            final_state.rot.coeffs()[0],
+            final_state.rot.coeffs()[1],
+            final_state.rot.coeffs()[2]
+
+        };
+
+        // double rotation_arr[] = {
+        //     odomAftMapped.pose.pose.orientation.w,
+        //     odomAftMapped.pose.pose.orientation.x,
+        //     odomAftMapped.pose.pose.orientation.y,
+        //     odomAftMapped.pose.pose.orientation.z
+        // };
+        double ba_arr[] = {
+            final_state.ba.x(),
+            final_state.ba.y(),
+            final_state.ba.z()
+        };
+        double bg_arr[] = {
+            final_state.bg.x(),
+            final_state.bg.y(),
+            final_state.bg.z()
+        };
+        double grav_arr[] = {
+            final_state.grav.get_vect().x(),
+            final_state.grav.get_vect().y(),
+            final_state.grav.get_vect().z()
         };
 
         data_dump["position"] = position_arr;
         data_dump["rotation"] = rotation_arr;
+        data_dump["ba"] = ba_arr;
+        data_dump["bg"] = bg_arr;
+        data_dump["grav"] = grav_arr;
+
 
         std::ofstream jsonFile(last_state_json_path);
 
