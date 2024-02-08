@@ -101,6 +101,11 @@ bool time_sync_en = false, extrinsic_est_en = true, path_en = true, pcd_save_en 
 bool save_openmvs_file_en, save_image_and_pose_en;
 bool save_cloud_pcd_en, save_cloud_ply_en, save_cloud_lio_pcd;
 double lidar_time_offset = 0.0;
+
+bool initial_voxel_map = true;
+
+bool init_new_voxel_map = false;
+
 /**************************/
 
 bool save_hba_pose_en = false;
@@ -185,6 +190,51 @@ namespace thresholds{
 }
 
 
+namespace stateManager{
+    template <class ContainerAllocator>
+    struct changeState_ { 
+    typedef changeState_<ContainerAllocator> Type;
+
+
+    changeState_()
+    : header()
+    , value()
+    , state() {
+    
+    }
+
+    changeState_(const ContainerAllocator& _alloc)
+    : header(_alloc)
+    , value()
+    , state() {
+    (void)_alloc;
+    }
+
+
+    typedef  ::std_msgs::Header_<ContainerAllocator>  _header_type;
+    _header_type header;
+
+    typedef bool defineState;
+    defineState state;
+
+    typedef string stateValue;
+    stateValue value; 
+
+
+    typedef boost::shared_ptr<stateManager::changeState_<ContainerAllocator> > Ptr;
+    typedef boost::shared_ptr<stateManager::changeState_<ContainerAllocator> const> ConstPtr;
+
+    };
+
+    typedef stateManager::changeState_<std::allocator<void> > changeState;
+
+    typedef boost::shared_ptr<stateManager::changeState > changeStatePtr;
+    typedef boost::shared_ptr<stateManager::changeState const> changeStateConstPtr;
+
+
+}
+
+
 struct mapping_tweak_values { 
     int max_layer;
     double plannar_threshold;
@@ -200,6 +250,7 @@ vector<PointVector> Nearest_Points;
 vector<double> extrinT(3, 0.0);
 vector<double> extrinR(9, 0.0);
 std::deque<double> time_buffer;
+std::deque<stateManager::changeState::ConstPtr> global_state_change_buffer;
 std::deque<PointCloudXYZINormal::Ptr> lidar_buffer;
 std::deque<sensor_msgs::Imu::ConstPtr> imu_buffer;
 std::deque<sensor_msgs::ImageConstPtr> cam_buffer;
@@ -573,8 +624,36 @@ void publish_small_room_info(const std_msgs::String::ConstPtr& msg){
 
     std::cout<< "test:" << data.substr(data.find("In")+3, data.find("Room")-4) << endl;
 
+
+    stateManager::changeState room_state_params;
+
+
     if (small_str == data.substr(data.find("In")+3, data.find("Room")-4)) {
         
+
+        bool changeCurrentState=false;
+
+        if (!global_state_change_buffer.empty()){
+
+            auto prevState = global_state_change_buffer.back();
+
+
+            std::cout << "PREV STATE : VALUE :" << prevState->value << "\n";
+            std::cout << "PREV STATE : STATE :" << prevState->state << "\n";
+            std::cout << "CURR STATE : VALUE :" << small_str << "\n";
+
+
+            if (prevState->value == small_str){
+                changeCurrentState = false;
+            }
+            else{
+                changeCurrentState = true;
+            }
+
+        }
+
+
+
         LOG_S(INFO) << "Entered small room. Setting VOXEL SIZE: 0.1 , DOWN SAMPLE: 0.05 " << std::endl;
         
         int new_max_layer = small_room_max_layer;
@@ -609,6 +688,15 @@ void publish_small_room_info(const std_msgs::String::ConstPtr& msg){
 
         threshold_values_buffer.push_back(push_thres);
 
+
+        room_state_params.header.stamp = ros_timestamp;
+        room_state_params.value = small_str;
+        room_state_params.state = changeCurrentState;
+
+        stateManager::changeState::ConstPtr push_room_state_params = boost::make_shared<stateManager::changeState>(room_state_params);
+        
+        global_state_change_buffer.push_back(push_room_state_params);
+
         std::cout<< "******************************"<< endl;
         std::cout << "THRESHOLD UPDATED PARAMS" << endl;
         std::cout << "******************************"<< endl;
@@ -620,16 +708,47 @@ void publish_small_room_info(const std_msgs::String::ConstPtr& msg){
             }
         std::cout << " ]" << endl;
         std::cout<< "Planar Threshold: " << planar_thres << endl;
+        std::cout<< "State Changed : " << changeCurrentState << "\n";
         std::cout<< "******************************"<< endl;
 
 
 
 
     } 
+
+
+
     else if (large_str == data.substr(data.find("In")+3, data.find("Area")-4)) {
+
+
+        bool changeCurrentState=false;
+
+
+
         LOG_S(INFO) << "Entered Large Room. Setting VOXEL SIZE: " << default_voxel_size << ", DOWN SAMPLE: " << filter_size_surf_min_default << std::endl;
         voxel_timestamp.data = default_voxel_size;
         down_sample_timestamp.data = filter_size_surf_min_default;
+
+
+        if (!global_state_change_buffer.empty()){
+
+            auto prevState = global_state_change_buffer.back();
+
+            std::cout << "PREV STATE : VALUE :" << prevState->value << "\n";
+            std::cout << "PREV STATE : STATE :" << prevState->state << "\n";
+            std::cout << "CURR STATE : VALUE :" << large_str << "\n";
+
+
+            if (prevState->value == large_str){
+                changeCurrentState = false;
+            }
+            else{
+                changeCurrentState = true;
+            }
+
+        }
+
+
         // max_voxel_size = default_voxel_size;
         // filter_size_surf_min = filter_size_surf_min_default;
         pv_lio::Float32Stamped::ConstPtr voxel_ptr_timestamp = boost::make_shared<pv_lio::Float32Stamped>(voxel_timestamp);
@@ -653,6 +772,15 @@ void publish_small_room_info(const std_msgs::String::ConstPtr& msg){
 
         threshold_values_buffer.push_back(push_thres);
 
+
+        room_state_params.header.stamp = ros_timestamp;
+        room_state_params.value = large_str;
+        room_state_params.state = changeCurrentState;
+
+        stateManager::changeState::ConstPtr push_room_state_params = boost::make_shared<stateManager::changeState>(room_state_params);
+        
+        global_state_change_buffer.push_back(push_room_state_params);
+
         std::cout<< "******************************"<< endl;
         std::cout << "THRESHOLD UPDATED PARAMS" << endl;
         std::cout << "******************************"<< endl;
@@ -664,6 +792,7 @@ void publish_small_room_info(const std_msgs::String::ConstPtr& msg){
             }
         std::cout << " ]" << endl;
         std::cout<< "Planar Threshold: " << planar_thres << endl;
+        std::cout<< "State Changed : " << changeCurrentState << "\n";
         std::cout<< "******************************"<< endl;
 
         }
@@ -785,16 +914,23 @@ std::tuple<bool, bool> sync_packages(MeasureGroup &meas) {
     }
 
     // set voxel size if current timestamp > voxel message timestamp
-    if (!voxel_size_buffer.empty() && !threshold_values_buffer.empty()) {
+    if (!voxel_size_buffer.empty() && !threshold_values_buffer.empty() and !global_state_change_buffer.empty()) {
         auto front = voxel_size_buffer.front();
 
         auto first_thres_values = threshold_values_buffer.front();
 
         auto new_downsample_value = down_sample_buffer.front();
-        
+
+        auto getcurrentState = global_state_change_buffer.front();
+
         // LOG_S(INFO) << "front voxel timestamp " << front->header.stamp.toSec() << ", lidar last timestamp: " << last_timestamp_lidar << std::endl;
 
-        if (lidar_end_time > front->header.stamp.toSec() && lidar_end_time > first_thres_values->header.stamp.toSec() && lidar_end_time > new_downsample_value->header.stamp.toSec()) {
+        if (lidar_end_time > front->header.stamp.toSec() && 
+            lidar_end_time > first_thres_values->header.stamp.toSec() && 
+            lidar_end_time > new_downsample_value->header.stamp.toSec() && 
+            lidar_end_time > getcurrentState->header.stamp.toSec()
+        
+        ) {
             if (common::debug_small_rooms){
 
                 std::cout << endl << "\033[1;32msetting max_voxel_size to: \033[0m" << front->data << "\033[1;32m set voxel timestamp: \033[0m" << front->header.stamp.toSec() << "\033[1;32m lidar last timestamp: \033[0m" << last_timestamp_lidar << std::endl;
@@ -810,6 +946,18 @@ std::tuple<bool, bool> sync_packages(MeasureGroup &meas) {
             threshold_values_buffer.pop_front();
             down_sample_buffer.pop_front();
             
+
+            if (getcurrentState->state==true){
+                mtx_buffer.lock();
+
+                init_new_voxel_map = true;
+
+                mtx_buffer.unlock();
+                sig_buffer.notify_all();
+
+            }
+
+            global_state_change_buffer.pop_front();
 
 
             std::cout << " " << endl;
@@ -1707,7 +1855,57 @@ int main(int argc, char **argv) {
                     publish_frame_world(pubLaserCloudFull);
                     // publish_frame_body(pubLaserCloudFull_body);
                 }
+                initial_voxel_map = false;
                 init_map = true;
+                continue;
+            }
+
+            if (init_new_voxel_map==true && !initial_voxel_map) {
+                PointCloudXYZINormal::Ptr world_lidar(new PointCloudXYZINormal);
+                transformLidar(state_point, feats_undistort, world_lidar);
+                std::vector<pointWithCov> pv_list;
+
+                std::cout << kf.get_P() << std::endl;
+                // 计算第一帧所有点的covariance 并用于构建初始地图
+                for (size_t i = 0; i < world_lidar->size(); i++) {
+                    pointWithCov pv;
+                    pv.point << world_lidar->points[i].x, world_lidar->points[i].y,
+                        world_lidar->points[i].z;
+                    V3D point_this(feats_undistort->points[i].x,
+                                   feats_undistort->points[i].y,
+                                   feats_undistort->points[i].z);
+                    // if z=0, error will occur in calcBodyCov. To be solved
+                    if (point_this[2] == 0) {
+                        point_this[2] = 0.001;
+                    }
+                    M3D cov_lidar = calcBodyCov(point_this, ranging_cov, angle_cov);
+                    // 转换到world系
+                    M3D cov_world = transformLiDARCovToWorld(point_this, kf, cov_lidar);
+
+                    pv.cov = cov_world;
+                    pv_list.push_back(pv);
+                    Eigen::Vector3d sigma_pv = pv.cov.diagonal();
+                    sigma_pv[0] = sqrt(sigma_pv[0]);
+                    sigma_pv[1] = sqrt(sigma_pv[1]);
+                    sigma_pv[2] = sqrt(sigma_pv[2]);
+                }
+
+                std::cout<< "\033[1;32m******************************\033[0m" << endl;
+                std::cout<<" \033[1;32m BUILDING NEW VOXEL MAP \033[0m"<< "\n";
+                std::cout<< "\033[1;32m******************************\033[0m" << endl;
+
+                buildVoxelMap(pv_list, max_voxel_size, max_layer, layer_size,
+                              max_points_size, max_cov_points_size, min_eigen_value,
+                              voxel_map);
+                LOG_S(INFO) << "build voxel map" << std::endl;
+
+                if (publish_voxel_map) {
+                    pubVoxelMap(voxel_map, publish_max_voxel_layer, voxel_map_pub);
+                    publish_frame_world(pubLaserCloudFull);
+                    // publish_frame_body(pubLaserCloudFull_body);
+                }
+                init_map = true;
+                init_new_voxel_map = false;
                 continue;
             }
 
@@ -1878,8 +2076,8 @@ int main(int argc, char **argv) {
         pcl::PCDWriter pcd_writer;
         LOG_S(INFO) << "current lio only scan saved to " << file_name << endl;
         pcd_writer.writeBinary(all_points_dir, *pcl_wait_save);
-        pcl::io::savePLYFileASCII(save_base_path + "/scans.ply", *pcl_wait_save);
-        pcl::io::savePCDFileASCII(save_base_path + "/scans2.pcd", *pcl_wait_save);
+        // pcl::io::savePLYFileASCII(save_base_path + "/scans.ply", *pcl_wait_save);
+        // pcl::io::savePCDFileASCII(save_base_path + "/scans2.pcd", *pcl_wait_save);
     }
 
     return EXIT_SUCCESS;
